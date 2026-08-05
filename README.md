@@ -180,7 +180,11 @@ failure stops, artifact retrieval, and the observed CUDA compatibility issues.
 ## Run the staged curriculum
 
 Initialize durable controller state, render a config, and inspect it before
-launching:
+launching. The default starts directly with Level 1 only; use
+`--start-stage introduce_level2` (or another named stage) to select a mix
+deliberately. Alternatively, use `curriculum_controller.py assess` with
+sequential static traces from all three levels to create an evidence-based
+starting state without counting that baseline as a promotion.
 
 ```bash
 uv run python scripts/curriculum_controller.py init \

@@ -65,12 +65,46 @@ This provides repair headroom while bounding a three-attempt interaction.
 
 ## Commands
 
-Initialize durable state:
+### Choose how to start
+
+The default manual path starts directly in the Level 1-only mix and does not
+run an evaluation:
 
 ```bash
 uv run python scripts/curriculum_controller.py init \
   --state artifacts/curriculum/state.json
 ```
+
+To intentionally begin at another curriculum mix, select its stage explicitly.
+The state records this as a manual initialization, not as a model promotion:
+
+```bash
+uv run python scripts/curriculum_controller.py init \
+  --state artifacts/curriculum/medium-start-state.json \
+  --start-stage introduce_level2
+```
+
+For an evidence-based placement, first evaluate one *static* policy
+sequentially on disjoint Level 1, Level 2, and Level 3 pools. Then let
+`assess` choose a conservative starting mix from the three trace files:
+
+```bash
+uv run python scripts/curriculum_controller.py assess \
+  --trace 1:outputs/bootstrap-level1/traces.jsonl \
+  --trace 2:outputs/bootstrap-level2/traces.jsonl \
+  --trace 3:outputs/bootstrap-level3/traces.jsonl \
+  --min-examples 24 \
+  --state artifacts/curriculum/assessed-start-state.json
+```
+
+`assess` uses the curriculum thresholds and one-sided Wilson bound to recommend
+a stage, and records the traces' aggregate metrics as initialization
+provenance. It never adds those results to the promotion history: promotion
+still requires two policy-distinct post-start checkpoints. The controller does
+not launch this evaluation itself, because the Qwen path must be served
+statically at concurrency one rather than through prime-rl's shared dispatcher.
+
+### Render or run a selected state
 
 Render one stage without launching:
 

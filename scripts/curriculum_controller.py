@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-STATE_VERSION = 2
+STATE_VERSION = 3
 DEFAULT_STAGES = (
     ("level1_only", (1.0, 0.0, 0.0)),
     ("introduce_level2", (0.8, 0.2, 0.0)),
@@ -26,6 +26,7 @@ DEFAULT_STAGES = (
     ("introduce_level3", (0.2, 0.6, 0.2)),
     ("advanced", (0.1, 0.4, 0.5)),
 )
+STAGE_INDEX = {name: index for index, (name, _ratios) in enumerate(DEFAULT_STAGES)}
 MAX_COMPLETION_TOKENS = 1536
 
 
@@ -57,6 +58,7 @@ class CurriculumState:
     observed_steps: list[int] = field(default_factory=list)
     evaluations: list[dict[str, Any]] = field(default_factory=list)
     transitions: list[dict[str, Any]] = field(default_factory=list)
+    initialization: dict[str, Any] = field(default_factory=dict)
 
     @property
     def stage_name(self) -> str:
@@ -75,8 +77,11 @@ def load_state(path: Path) -> CurriculumState:
         data["version"] = STATE_VERSION
         data["checkpoint_step"] = data["current_step"]
         data["step_offset"] = 0
+    elif data.get("version") == 2:
+        data["version"] = STATE_VERSION
     elif data.get("version") != STATE_VERSION:
         raise ValueError(f"Unsupported curriculum state version: {data.get('version')}")
+    data.setdefault("initialization", {})
     state = CurriculumState(**data)
     if not 0 <= state.stage_index < len(DEFAULT_STAGES):
         raise ValueError(f"Invalid curriculum stage index: {state.stage_index}")
@@ -85,6 +90,27 @@ def load_state(path: Path) -> CurriculumState:
     if state.checkpoint_step < 0 or state.step_offset < 0:
         raise ValueError("Checkpoint step and step offset must be non-negative")
     return state
+
+
+def initial_state(
+    stage_name: str = "level1_only",
+    *,
+    mode: str = "manual",
+    assessment: dict[str, Any] | None = None,
+) -> CurriculumState:
+    """Create a fresh state without manufacturing a promotion observation."""
+    try:
+        stage_index = STAGE_INDEX[stage_name]
+    except KeyError as error:
+        valid = ", ".join(STAGE_INDEX)
+        raise ValueError(f"Unknown stage {stage_name!r}; choose one of: {valid}") from error
+    initialization: dict[str, Any] = {
+        "mode": mode,
+        "selected_stage": stage_name,
+    }
+    if assessment is not None:
+        initialization["assessment"] = assessment
+    return CurriculumState(stage_index=stage_index, initialization=initialization)
 
 
 def save_state(path: Path, state: CurriculumState) -> None:
@@ -111,6 +137,7 @@ def rebase_state(
         observed_steps=list(source.observed_steps),
         evaluations=list(source.evaluations),
         transitions=list(source.transitions),
+        initialization=dict(source.initialization),
     )
 
 
@@ -243,6 +270,83 @@ def _steady_pass(
         if wilson_lower(successes, metrics["examples"]) < threshold:
             return False
     return True
+
+
+def _assessment_gate(
+    metrics: LevelMetrics,
+    *,
+    threshold: float,
+    min_examples: int,
+) -> dict[str, Any]:
+    """Describe one conservative placement gate without mutating state."""
+    lower_bound = wilson_lower(
+        metrics.raw_case_fraction * metrics.examples,
+        metrics.examples,
+    )
+    passes = (
+        metrics.examples >= min_examples
+        and metrics.error_rate <= 0.02
+        and lower_bound >= threshold
+    )
+    return {
+        "threshold": threshold,
+        "examples": metrics.examples,
+        "error_rate": metrics.error_rate,
+        "wilson_lower_one_sided_95": lower_bound,
+        "passes": passes,
+    }
+
+
+def recommend_start_stage(
+    levels: dict[str, LevelMetrics],
+    *,
+    min_examples: int,
+) -> tuple[str, str, dict[str, dict[str, Any]]]:
+    """Recommend a mix from one all-level baseline without claiming promotion.
+
+    A bootstrap assessment is a placement aid, not evidence for the normal
+    two-policy promotion gate.  It therefore remains outside ``evaluations``.
+    """
+    required = {"1", "2", "3"}
+    if set(levels) != required:
+        missing = sorted(required - set(levels))
+        extra = sorted(set(levels) - required)
+        details = []
+        if missing:
+            details.append(f"missing Level(s) {', '.join(missing)}")
+        if extra:
+            details.append(f"unexpected Level(s) {', '.join(extra)}")
+        raise ValueError("Assessment requires exactly Levels 1, 2, and 3: " + "; ".join(details))
+
+    gates = {
+        "level1_mastery": _assessment_gate(
+            levels["1"], threshold=0.55, min_examples=min_examples
+        ),
+        "level2_signal": _assessment_gate(
+            levels["2"], threshold=0.20, min_examples=min_examples
+        ),
+        "level2_mastery": _assessment_gate(
+            levels["2"], threshold=0.45, min_examples=min_examples
+        ),
+        "level2_advanced": _assessment_gate(
+            levels["2"], threshold=0.60, min_examples=min_examples
+        ),
+        "level3_signal": _assessment_gate(
+            levels["3"], threshold=0.10, min_examples=min_examples
+        ),
+    }
+    if not gates["level1_mastery"]["passes"]:
+        return "level1_only", "level1_baseline", gates
+    if not gates["level2_signal"]["passes"]:
+        return "introduce_level2", "level2_baseline", gates
+    if not gates["level2_mastery"]["passes"]:
+        return "level2_working_set", "level2_signal", gates
+    if not (
+        gates["level2_advanced"]["passes"]
+        and gates["level3_signal"]["passes"]
+    ):
+        return "introduce_level3", "level3_baseline", gates
+    return "advanced", "all_level_baseline", gates
 
 
 def maybe_transition(
@@ -435,6 +539,40 @@ def ingest_trace_levels(
     )
     save_state(state_path, state)
     return levels, reason
+
+
+def parse_level_trace_specs(specifications: Iterable[str]) -> dict[int, list[Path]]:
+    trace_files_by_level: dict[int, list[Path]] = {}
+    for specification in specifications:
+        try:
+            level_literal, path_literal = specification.split(":", 1)
+            level = int(level_literal)
+        except ValueError as error:
+            raise ValueError(
+                f"Invalid --trace value {specification!r}; expected LEVEL:PATH"
+            ) from error
+        trace_files_by_level.setdefault(level, []).append(Path(path_literal))
+    return trace_files_by_level
+
+
+def assess_trace_levels(
+    trace_files_by_level: dict[int, list[Path]],
+    *,
+    min_examples: int,
+) -> tuple[dict[str, LevelMetrics], str, str, dict[str, dict[str, Any]]]:
+    """Summarize a static Level 1/2/3 baseline and recommend a start stage."""
+    levels = {
+        str(level): summarize_rows(
+            [row for path in trace_files for row in _trace_rows(path)],
+            level,
+        )
+        for level, trace_files in sorted(trace_files_by_level.items())
+    }
+    stage_name, reason, gates = recommend_start_stage(
+        levels,
+        min_examples=min_examples,
+    )
+    return levels, stage_name, reason, gates
 
 
 def _environment_block(
@@ -757,6 +895,27 @@ def build_parser() -> argparse.ArgumentParser:
 
     initialize = subparsers.add_parser("init")
     initialize.add_argument("--state", type=Path, required=True)
+    initialize.add_argument(
+        "--start-stage",
+        choices=tuple(STAGE_INDEX),
+        default="level1_only",
+        help="start directly with this training mix; no baseline evaluation is run",
+    )
+
+    assess = subparsers.add_parser("assess")
+    assess.add_argument(
+        "--trace",
+        action="append",
+        required=True,
+        metavar="LEVEL:PATH",
+        help="static held-out trace; provide Levels 1, 2, and 3",
+    )
+    assess.add_argument("--min-examples", type=int, default=24)
+    assess.add_argument(
+        "--state",
+        type=Path,
+        help="write a fresh state at the recommended stage",
+    )
 
     ingest = subparsers.add_parser("ingest")
     ingest.add_argument("--state", type=Path, required=True)
@@ -838,7 +997,43 @@ def main() -> int:
     if args.command == "init":
         if args.state.exists():
             raise FileExistsError(args.state)
-        save_state(args.state, CurriculumState())
+        save_state(args.state, initial_state(args.start_stage))
+        return 0
+    if args.command == "assess":
+        if args.min_examples <= 0:
+            raise ValueError("--min-examples must be positive")
+        trace_files_by_level = parse_level_trace_specs(args.trace)
+        levels, stage_name, reason, gates = assess_trace_levels(
+            trace_files_by_level,
+            min_examples=args.min_examples,
+        )
+        assessment = {
+            "levels": {key: asdict(metrics) for key, metrics in levels.items()},
+            "gates": gates,
+            "reason": reason,
+        }
+        if args.state is not None:
+            if args.state.exists():
+                raise FileExistsError(args.state)
+            save_state(
+                args.state,
+                initial_state(
+                    stage_name,
+                    mode="assessment",
+                    assessment=assessment,
+                ),
+            )
+        print(
+            json.dumps(
+                {
+                    "recommended_stage": stage_name,
+                    "reason": reason,
+                    **assessment,
+                    "state_written": str(args.state.resolve()) if args.state else None,
+                },
+                indent=2,
+            )
+        )
         return 0
     if args.command == "ingest":
         found = ingest_evaluations(
@@ -866,16 +1061,7 @@ def main() -> int:
         )
         return 0
     if args.command == "ingest-traces":
-        trace_files_by_level: dict[int, list[Path]] = {}
-        for specification in args.trace:
-            try:
-                level_literal, path_literal = specification.split(":", 1)
-                level = int(level_literal)
-            except ValueError as error:
-                raise ValueError(
-                    f"Invalid --trace value {specification!r}; expected LEVEL:PATH"
-                ) from error
-            trace_files_by_level.setdefault(level, []).append(Path(path_literal))
+        trace_files_by_level = parse_level_trace_specs(args.trace)
         metrics_by_level, reason = ingest_trace_levels(
             args.state,
             trace_files_by_level,

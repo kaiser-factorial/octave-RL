@@ -179,6 +179,96 @@ def test_eval_scope_expands_only_when_a_gate_needs_it(tmp_path):
         assert [item["name"] for item in parsed["orchestrator"]["eval"]["env"]] == names
 
 
+def test_manual_start_stage_is_recorded_without_a_promotion():
+    state = curriculum.initial_state("introduce_level2")
+    assert state.stage_name == "introduce_level2"
+    assert state.evaluations == []
+    assert state.transitions == []
+    assert state.initialization == {
+        "mode": "manual",
+        "selected_stage": "introduce_level2",
+    }
+
+
+def test_init_cli_accepts_a_manual_start_stage(tmp_path, monkeypatch):
+    state_path = tmp_path / "manual-state.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(MODULE_PATH),
+            "init",
+            "--state",
+            str(state_path),
+            "--start-stage",
+            "introduce_level3",
+        ],
+    )
+    assert curriculum.main() == 0
+    state = curriculum.load_state(state_path)
+    assert state.stage_name == "introduce_level3"
+    assert state.initialization["mode"] == "manual"
+
+
+def test_assessment_recommends_a_stage_without_promotion_history(tmp_path):
+    paths = {}
+    for level, raw in ((1, 0.9), (2, 0.5), (3, 0.0)):
+        path = tmp_path / f"level-{level}.jsonl"
+        path.write_text(
+            "\n".join(
+                json.dumps(
+                    {
+                        "metrics": {"raw_case_fraction": raw, "attempts_used": 1},
+                        "calls": [],
+                        "errors": [],
+                    }
+                )
+                for _ in range(24)
+            )
+            + "\n"
+        )
+        paths[level] = [path]
+
+    levels, stage_name, reason, gates = curriculum.assess_trace_levels(
+        paths,
+        min_examples=24,
+    )
+    assert set(levels) == {"1", "2", "3"}
+    assert stage_name == "level2_working_set"
+    assert reason == "level2_signal"
+    assert gates["level2_signal"]["passes"] is True
+    assert gates["level2_mastery"]["passes"] is False
+
+    state = curriculum.initial_state(
+        stage_name,
+        mode="assessment",
+        assessment={"levels": {key: curriculum.asdict(value) for key, value in levels.items()}},
+    )
+    assert state.evaluations == []
+    assert state.transitions == []
+    assert state.initialization["mode"] == "assessment"
+
+
+def test_assessment_requires_all_three_levels(tmp_path):
+    path = tmp_path / "level-1.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "metrics": {"raw_case_fraction": 1.0, "attempts_used": 1},
+                "calls": [],
+                "errors": [],
+            }
+        )
+        + "\n"
+    )
+    try:
+        curriculum.assess_trace_levels({1: [path]}, min_examples=1)
+    except ValueError as error:
+        assert "Levels 1, 2, and 3" in str(error)
+    else:
+        raise AssertionError("partial assessment was accepted")
+
+
 def test_train_only_config_omits_integrated_eval(tmp_path):
     text = curriculum.render_config(
         curriculum.CurriculumState(stage_index=1),
@@ -336,10 +426,31 @@ def test_version1_state_migrates_checkpoint_progress(tmp_path):
         )
     )
     state = curriculum.load_state(path)
-    assert state.version == 2
+    assert state.version == 3
     assert state.current_step == 15
     assert state.checkpoint_step == 15
     assert state.step_offset == 0
+
+
+def test_version2_state_migrates_assessment_metadata(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "stage_index": 0,
+                "current_step": 0,
+                "checkpoint_step": 0,
+                "step_offset": 0,
+                "observed_steps": [],
+                "evaluations": [],
+                "transitions": [],
+            }
+        )
+    )
+    state = curriculum.load_state(path)
+    assert state.version == 3
+    assert state.initialization == {}
 
 
 def test_standalone_traces_can_trigger_a_live_transition(tmp_path):
