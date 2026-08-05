@@ -13,6 +13,10 @@ level = 1
 num_tasks = 500
 seed = 20260729
 
+[taskset.task.user]
+max_attempts = 1
+guide_enabled = false
+
 [harness]
 id = "null"
 

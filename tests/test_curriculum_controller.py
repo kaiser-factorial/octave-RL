@@ -141,6 +141,7 @@ def test_render_uses_stage_ratios_and_stage_relevant_evals(tmp_path):
         eval_interval=5,
         eval_examples=50,
         learning_rate=5e-6,
+        integrated_eval=True,
     )
     assert 'name = "octave-level1-train"' in text
     assert 'name = "octave-level2-train"' in text
@@ -174,6 +175,7 @@ def test_eval_scope_expands_only_when_a_gate_needs_it(tmp_path):
             target_step=5,
             eval_interval=5,
             eval_examples=20,
+            integrated_eval=True,
         )
         parsed = tomllib.loads(text)
         assert [item["name"] for item in parsed["orchestrator"]["eval"]["env"]] == names
@@ -283,6 +285,162 @@ def test_train_only_config_omits_integrated_eval(tmp_path):
     assert "eval" not in parsed["orchestrator"]
     assert len(parsed["orchestrator"]["train"]["env"]) == 2
     assert parsed["ckpt"]["interval"] == 10
+
+
+def test_render_defaults_to_bounded_train_only_configuration(tmp_path):
+    text = curriculum.render_config(
+        curriculum.CurriculumState(stage_index=1),
+        model_path=tmp_path / "model",
+        output_dir=tmp_path / "run",
+        target_step=10,
+        eval_interval=10,
+        eval_examples=20,
+    )
+    parsed = tomllib.loads(text)
+    assert "eval" not in parsed["orchestrator"]
+    assert parsed["orchestrator"]["batch_size"] == 8
+    assert parsed["orchestrator"]["group_size"] == 2
+    assert parsed["orchestrator"]["max_inflight_rollouts"] == 2
+    assert {
+        item["pool"]["multiplex"] for item in parsed["orchestrator"]["train"]["env"]
+    } == {2}
+
+
+def test_cli_defaults_to_train_only_but_accepts_legacy_disable_flag():
+    parser = curriculum.build_parser()
+    args = parser.parse_args(
+        [
+            "render",
+            "--state",
+            "state.json",
+            "--model-path",
+            "model",
+            "--output-dir",
+            "output",
+            "--target-step",
+            "5",
+            "--config",
+            "config.toml",
+        ]
+    )
+    assert args.integrated_eval is False
+    assert args.group_size == 2
+    assert args.max_inflight_rollouts == 2
+    legacy = parser.parse_args(
+        [
+            "render",
+            "--state",
+            "state.json",
+            "--model-path",
+            "model",
+            "--output-dir",
+            "output",
+            "--target-step",
+            "5",
+            "--config",
+            "config.toml",
+            "--disable-integrated-eval",
+        ]
+    )
+    assert legacy.integrated_eval is False
+
+
+def test_run_cli_defaults_to_one_train_only_chunk():
+    parser = curriculum.build_parser()
+    args = parser.parse_args(
+        [
+            "run",
+            "--state",
+            "state.json",
+            "--prime-rl-dir",
+            "prime-rl",
+            "--model-path",
+            "model",
+            "--output-dir",
+            "output",
+            "--config",
+            "config.toml",
+            "--price-per-hour",
+            "1",
+        ]
+    )
+    assert args.integrated_eval is False
+    assert args.continue_train_only is False
+    assert args.group_size == 2
+    assert args.max_inflight_rollouts == 2
+
+
+def test_train_only_run_returns_after_one_durable_chunk(tmp_path, monkeypatch):
+    state_path = tmp_path / "state.json"
+    curriculum.save_state(state_path, curriculum.CurriculumState())
+    args = curriculum.build_parser().parse_args(
+        [
+            "run",
+            "--state",
+            str(state_path),
+            "--prime-rl-dir",
+            str(tmp_path),
+            "--model-path",
+            str(tmp_path / "model"),
+            "--output-dir",
+            str(tmp_path / "output"),
+            "--config",
+            str(tmp_path / "generated.toml"),
+            "--max-steps",
+            "10",
+            "--chunk-steps",
+            "2",
+            "--price-per-hour",
+            "1",
+        ]
+    )
+    calls = []
+
+    def fake_run_chunk(**kwargs):
+        calls.append(kwargs)
+        return 0, False
+
+    monkeypatch.setattr(curriculum, "run_chunk", fake_run_chunk)
+    assert curriculum.orchestrate(args) == 0
+    assert len(calls) == 1
+    assert curriculum.load_state(state_path).current_step == 2
+
+
+def test_continue_train_only_requires_explicit_opt_in(tmp_path, monkeypatch):
+    state_path = tmp_path / "state.json"
+    curriculum.save_state(state_path, curriculum.CurriculumState())
+    args = curriculum.build_parser().parse_args(
+        [
+            "run",
+            "--state",
+            str(state_path),
+            "--prime-rl-dir",
+            str(tmp_path),
+            "--model-path",
+            str(tmp_path / "model"),
+            "--output-dir",
+            str(tmp_path / "output"),
+            "--config",
+            str(tmp_path / "generated.toml"),
+            "--max-steps",
+            "4",
+            "--chunk-steps",
+            "2",
+            "--price-per-hour",
+            "1",
+            "--continue-train-only",
+        ]
+    )
+    calls = []
+
+    def fake_run_chunk(**kwargs):
+        calls.append(kwargs)
+        return 0, False
+
+    monkeypatch.setattr(curriculum, "run_chunk", fake_run_chunk)
+    assert curriculum.orchestrate(args) == 0
+    assert len(calls) == 2
+    assert curriculum.load_state(state_path).current_step == 4
 
 
 def test_concurrency_limited_config_preserves_batch_size(tmp_path):

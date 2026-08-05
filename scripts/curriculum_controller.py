@@ -597,7 +597,7 @@ harness = {{ id = "null", runtime = {{ type = "prime" }} }}
 max_turns = 3
 max_total_tokens = 6144
 timeout = {{ rollout = 700, finalize = 120, scoring = 60 }}
-pool = {{ type = "elastic", max_workers = 1, multiplex = {8 if train else 1} }}
+pool = {{ type = "elastic", max_workers = 1, multiplex = {train_group_size if train else 1} }}
 """.strip()
 
 
@@ -620,10 +620,10 @@ def render_config(
     eval_examples: int,
     full_finetune: bool = False,
     learning_rate: float = 1e-5,
-    integrated_eval: bool = True,
+    integrated_eval: bool = False,
     batch_size: int = 8,
-    group_size: int = 8,
-    max_inflight_rollouts: int = 8,
+    group_size: int = 2,
+    max_inflight_rollouts: int = 2,
 ) -> str:
     if group_size < 2:
         raise ValueError("GRPO --group-size must be at least 2")
@@ -820,7 +820,7 @@ def orchestrate(args: argparse.Namespace) -> int:
         raise ValueError("--batch-size must be a multiple of --group-size")
     if args.max_inflight_rollouts < args.group_size:
         raise ValueError("--max-inflight-rollouts must be at least --group-size")
-    integrated_eval = not args.disable_integrated_eval
+    integrated_eval = args.integrated_eval
     if integrated_eval and args.eval_examples < args.min_examples:
         raise ValueError("--eval-examples must be at least --min-examples")
     state_path = args.state.resolve()
@@ -878,6 +878,11 @@ def orchestrate(args: argparse.Namespace) -> int:
         state.current_step = target
         state.checkpoint_step = target_checkpoint
         save_state(state_path, state)
+        if not integrated_eval and not args.continue_train_only:
+            # A static merged checkpoint must be evaluated and ingested before
+            # a later chunk can legitimately transition the curriculum. Return
+            # after one durable train-only chunk so that boundary is explicit.
+            return 0
         if integrated_eval:
             ingest_evaluations(
                 state_path,
@@ -962,10 +967,21 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--eval-examples", type=int, default=20)
     render.add_argument("--full-finetune", action="store_true")
     render.add_argument("--learning-rate", type=float, default=1e-5)
-    render.add_argument("--disable-integrated-eval", action="store_true")
+    render.add_argument(
+        "--integrated-eval",
+        action="store_true",
+        help="enable in-process evaluation; unsafe on the tested Qwen/vLLM stack",
+    )
+    render.add_argument(
+        "--disable-integrated-eval",
+        dest="integrated_eval",
+        action="store_false",
+        help="deprecated compatibility flag; train-only is already the default",
+    )
+    render.set_defaults(integrated_eval=False)
     render.add_argument("--batch-size", type=int, default=8)
-    render.add_argument("--group-size", type=int, default=8)
-    render.add_argument("--max-inflight-rollouts", type=int, default=8)
+    render.add_argument("--group-size", type=int, default=2)
+    render.add_argument("--max-inflight-rollouts", type=int, default=2)
     render.add_argument("--config", type=Path, required=True)
 
     run = subparsers.add_parser("run")
@@ -983,10 +999,29 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--price-per-hour", type=float, required=True)
     run.add_argument("--full-finetune", action="store_true")
     run.add_argument("--learning-rate", type=float, default=1e-5)
-    run.add_argument("--disable-integrated-eval", action="store_true")
+    run.add_argument(
+        "--integrated-eval",
+        action="store_true",
+        help="enable in-process evaluation; unsafe on the tested Qwen/vLLM stack",
+    )
+    run.add_argument(
+        "--disable-integrated-eval",
+        dest="integrated_eval",
+        action="store_false",
+        help="deprecated compatibility flag; train-only is already the default",
+    )
+    run.set_defaults(integrated_eval=False)
+    run.add_argument(
+        "--continue-train-only",
+        action="store_true",
+        help=(
+            "run further train-only chunks without static evaluation; "
+            "the curriculum cannot transition until traces are later ingested"
+        ),
+    )
     run.add_argument("--batch-size", type=int, default=8)
-    run.add_argument("--group-size", type=int, default=8)
-    run.add_argument("--max-inflight-rollouts", type=int, default=8)
+    run.add_argument("--group-size", type=int, default=2)
+    run.add_argument("--max-inflight-rollouts", type=int, default=2)
     run.add_argument("--dry-run", action="store_true")
     return parser
 
@@ -1105,7 +1140,7 @@ def main() -> int:
                 eval_examples=args.eval_examples,
                 full_finetune=args.full_finetune,
                 learning_rate=args.learning_rate,
-                integrated_eval=not args.disable_integrated_eval,
+                integrated_eval=args.integrated_eval,
                 batch_size=args.batch_size,
                 group_size=args.group_size,
                 max_inflight_rollouts=args.max_inflight_rollouts,

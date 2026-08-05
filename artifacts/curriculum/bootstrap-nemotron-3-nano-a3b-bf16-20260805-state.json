@@ -1,0 +1,86 @@
+{
+  "checkpoint_step": 0,
+  "current_step": 0,
+  "evaluations": [],
+  "initialization": {
+    "assessment": {
+      "gates": {
+        "level1_mastery": {
+          "error_rate": 0.0,
+          "examples": 24,
+          "passes": false,
+          "threshold": 0.55,
+          "wilson_lower_one_sided_95": 0.35970057000166733
+        },
+        "level2_advanced": {
+          "error_rate": 0.0,
+          "examples": 24,
+          "passes": false,
+          "threshold": 0.6,
+          "wilson_lower_one_sided_95": 0.23305150558280216
+        },
+        "level2_mastery": {
+          "error_rate": 0.0,
+          "examples": 24,
+          "passes": false,
+          "threshold": 0.45,
+          "wilson_lower_one_sided_95": 0.23305150558280216
+        },
+        "level2_signal": {
+          "error_rate": 0.0,
+          "examples": 24,
+          "passes": true,
+          "threshold": 0.2,
+          "wilson_lower_one_sided_95": 0.23305150558280216
+        },
+        "level3_signal": {
+          "error_rate": 0.0,
+          "examples": 24,
+          "passes": false,
+          "threshold": 0.1,
+          "wilson_lower_one_sided_95": 0.08166403152462717
+        }
+      },
+      "levels": {
+        "1": {
+          "average_attempts": 1.0,
+          "error_rate": 0.0,
+          "eventual_success": 0.5,
+          "examples": 24,
+          "first_attempt_success": 0.5,
+          "level": 1,
+          "raw_case_fraction": 0.5208333333333334,
+          "truncation_rate": 0.0
+        },
+        "2": {
+          "average_attempts": 1.0,
+          "error_rate": 0.0,
+          "eventual_success": 0.375,
+          "examples": 24,
+          "first_attempt_success": 0.375,
+          "level": 2,
+          "raw_case_fraction": 0.375,
+          "truncation_rate": 0.0
+        },
+        "3": {
+          "average_attempts": 1.0,
+          "error_rate": 0.0,
+          "eventual_success": 0.16666666666666666,
+          "examples": 24,
+          "first_attempt_success": 0.16666666666666666,
+          "level": 3,
+          "raw_case_fraction": 0.17361111111111113,
+          "truncation_rate": 0.041666666666666664
+        }
+      },
+      "reason": "level1_baseline"
+    },
+    "mode": "assessment",
+    "selected_stage": "level1_only"
+  },
+  "observed_steps": [],
+  "stage_index": 0,
+  "step_offset": 0,
+  "transitions": [],
+  "version": 3
+}

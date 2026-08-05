@@ -16,9 +16,9 @@ model you intend to train.
 ## 1. What you're building, concretely
 
 Each task presents one fully-specified Octave function to write. The model returns a single code
-block. The environment writes it to a filename *it* chose, generates a test harness from
-precomputed expected values, runs it in a container, and scores the fraction of test cases that
-passed.
+block. The environment writes it to a filename *it* chose, runs it against generated hidden inputs
+in a candidate sandbox, and has the trusted task process compare the reported values against
+precomputed expected values. The score is the fraction of cases that match.
 
 Everything about that sentence is deliberate; §5 and §6 explain why.
 
@@ -66,9 +66,10 @@ it's licensed — which is why the target is Octave.)*
 **Expected values are computed in Python (numpy) at dataset-build time**, not by running a reference
 implementation at scoring time. Two consequences worth being deliberate about:
 
-1. No reference solution ever reaches the container, so there's nothing for the model to read or
-   overwrite.
-2. Scoring is a pure comparison — cheap, deterministic, no judge model, no second inference call.
+1. Neither reference outputs nor pass counters enter the sandbox that runs candidate code, so there
+   is no score state for the model to read or overwrite.
+2. Scoring is a pure host-side comparison — cheap, deterministic, no judge model, no second
+   inference call.
    This is the single best property Octave gives you as an RL target: correctness is numerically
    checkable.
 
@@ -83,13 +84,14 @@ Use a graduated primary reward and several observed-only metrics:
 | Function | Weight | Captures |
 |---|---|---|
 | `case_fraction` | **1.0** | fraction of test cases passed |
-| `runs_without_error` | 0.1 | did the file parse and execute at all |
 | `vectorized` | 0.0 → 0.1 later | source free of `for`/`while` when the task requires it |
 | `format_ok` | 0.0 | did the reply contain a parseable code block |
 
 The graduation is the point. Binary pass/fail turns a ten-case task into one bit of signal; scoring
 the fraction turns it into roughly ten, and it means a model producing valid-but-wrong Octave scores
-above one producing garbage. That difference *is* the gradient you want it climbing.
+above one producing garbage. That difference *is* the gradient you want it climbing. Apply the
+retry multiplier to this correctness reward only; code executing in an untrusted sandbox receives
+no separate execution or output-format bonus.
 
 Register the weight-0.0 entries with `add_metric(func, weight=0.0)` — observed, not priced. Watch a
 metric across a few hundred rollouts before deciding it deserves real weight. `verifiers` also ships
@@ -108,10 +110,12 @@ permitted are not.**
 
 - **The model never supplies a filename.** It returns one code block; you write it to
   `info["fn_name"] + ".m"`. There is no filename to validate because there is none in its output.
-- **The harness is written after the model's file and contains the expected values.** It isn't on
-  disk while the model is producing output, and the model can't name it.
-- **Snapshot the working directory anyway** — cheap, and it gives you a `tampering_detected` metric
-  for free. If files you didn't write appear, you want to know.
+- **The candidate runner contains inputs only.** It calls the candidate function and returns its
+  shape and flattened numeric values; expected values and pass counters remain in the trusted task
+  process. A terminal report is transport, never a score.
+- **Keep the candidate filesystem minimal.** Candidate code can modify every file in its own
+  sandbox, so no scoring decision may depend on that filesystem or its output beyond reported values
+  that are independently compared on the host.
 
 If you later relax the single-block design (multi-function tasks, say), the allowlist comes back —
 and note that hashing known files is *not* sufficient. A model can **add** a file that changes test
@@ -136,27 +140,26 @@ isn't reproducible.
 
 ### Running the tests
 
-Generate `run_cases.m` per task with the expected values inlined as literals, then invoke Octave
-over it. A starting point:
+Generate `run_candidate.m` per task with only the input literals, then invoke Octave over it. A
+starting point:
 
 ```bash
-octave --no-gui --quiet run_cases.m
+octave --no-gui --quiet run_candidate.m
 ```
 
-with the harness itself responsible for exit status and structured output:
+with the candidate runner responsible only for structured output:
 
 ```matlab
-% run_cases.m  (generated per task)
-passed = 0; total = N;
-% ... for each case: call the function in a try/catch, compare within tolerance,
-%     increment passed, and print a per-case line on failure ...
-printf('RESULT passed=%d total=%d\n', passed, total);
-exit(passed < total);
+% run_candidate.m  (generated per task)
+% ... for each case: call the function in a try/catch and save size(actual)
+%     plus actual(:)' in a record ...
+printf('__OCTAVE_CANDIDATE_RESULT__<fresh-token> %s\n', jsonencode(records));
 ```
 
-**Have the harness print a machine-readable summary and parse that** — don't rely on exit code
-alone. Exit-code-only scoring cannot distinguish a partially-correct solution from a syntax error,
-which is exactly the distinction `case_fraction` depends on.
+**Have the runner print a machine-readable transport record, then score it outside the sandbox** —
+don't rely on exit code or candidate-controlled pass counts. The trusted process checks shape and
+tolerance against its private expected values, which retains partial credit without placing a score
+oracle in the interpreter executing model code.
 
 **Five things to verify empirically before trusting any of the above.** None of it has been run;
 it's a reasoned starting point.
@@ -240,7 +243,7 @@ octave-rl/
 ├── octave_rl.py          # load_environment + the env class
 ├── generators/           # one module per task family
 │   └── ...
-├── harness.py            # builds run_cases.m from info["cases"]
+├── harness.py            # builds input-only candidate runners and trusted reference harnesses
 ├── pyproject.toml
 └── README.md
 ```
@@ -285,19 +288,20 @@ does not overlap between the two lists.
 
 ## 11. Validation
 
-- **Every generated task's reference answer passes its own harness.** Script this as a loop over the
-  whole pool. This is the highest-value check in the document — a task with a wrong expected value
-  trains the model to be wrong.
+- **Every generated task's reference answer passes a trusted reference harness.** Script this as a
+  loop over the whole pool. This is the highest-value check in the document — a task with a wrong
+  expected value trains the model to be wrong. That validator may use an expected-value harness
+  because it executes repository-owned reference code, never model code.
 - **A deliberately incorrect solution fails**, and `case_fraction` lands strictly between 0 and 1 for
   a partially-correct one. Verify the partial case explicitly; it's the entire point of the reward
   design.
 - **The reward distribution isn't degenerate.** Plot it across a few hundred rollouts. All-0 or all-1
   means no gradient no matter how good the tasks look individually.
 - **Check for the constant-output hack** (§4) before running anything long.
-- **At least one end-to-end test** that drives `Environment.evaluate(client, model, ...)` rather than
-  calling the environment's methods directly. Direct-call tests never exercise the base class, so
-  they can't catch API-contract mismatches — an environment can have a green test suite and be
-  entirely unrunnable.
+- **At least one end-to-end test** that drives the actual task runtime rather than calling only
+  parser helpers. Direct-call tests never exercise runtime/provisioning behavior, so they can't
+  catch API-contract mismatches — an environment can have a green test suite and be entirely
+  unrunnable.
 
 ## 12. Deliverables
 

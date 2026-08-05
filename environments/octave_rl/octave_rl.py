@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -10,13 +11,34 @@ from typing import Any
 
 import verifiers.v1 as vf
 from generators import build_tasks
-from harness import OCTAVE_IMAGE, RESULT_RE, build_harness, extract_code, format_ok
+from harness import (
+    CANDIDATE_RESULT_MARKER_PREFIX,
+    OCTAVE_IMAGE,
+    build_candidate_runner,
+    extract_code,
+    format_ok,
+    new_result_token,
+    parse_candidate_records,
+)
 from openai import AsyncOpenAI
 from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
 
 SYSTEM_PROMPT = """Write GNU Octave functions. Return exactly one fenced `octave`
 code block containing the requested function. Do not return tests, files, prose, or
 shell commands. The function name and signature must exactly match the prompt."""
+
+def attempt_multiplier(
+    *,
+    attempts: int,
+    second_attempt_multiplier: float,
+    guided_attempt_multiplier: float,
+) -> float:
+    """Return the configured discount for the attempt that earned correctness."""
+    if attempts >= 3:
+        return guided_attempt_multiplier
+    if attempts == 2:
+        return second_attempt_multiplier
+    return 1.0
 
 
 class OctaveData(vf.TaskData):
@@ -28,6 +50,149 @@ class OctaveData(vf.TaskData):
     tolerance: float
     require_vectorized: bool
     reference: str
+
+
+def _octave_shape(value: Any) -> list[int]:
+    if not isinstance(value, list):
+        return [1, 1]
+    if not value:
+        return [1, 0]
+    if all(not isinstance(item, list) for item in value):
+        return [1, len(value)]
+    if not all(isinstance(item, list) for item in value):
+        return []
+    widths = {len(item) for item in value}
+    return [len(value), widths.pop()] if len(widths) == 1 else []
+
+
+def _flatten(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return [item for child in value for item in _flatten(child)]
+    return [value]
+
+
+def _as_float(value: Any) -> float:
+    if value is None:
+        return math.nan
+    if isinstance(value, bool):
+        raise TypeError("boolean outputs are not supported")
+    return float(value)
+
+
+def candidate_record_matches(
+    record: dict[str, Any],
+    *,
+    expected: Any,
+    tolerance: float,
+) -> bool:
+    """Compare one isolated candidate result with the hidden expected value."""
+    if record.get("ok") is not True:
+        return False
+    try:
+        actual_shape = [int(item) for item in record["shape"]]
+        actual_values = [_as_float(item) for item in _flatten(record["values"])]
+        expected_values = [_as_float(item) for item in _flatten(expected)]
+    except (KeyError, TypeError, ValueError):
+        return False
+    if actual_shape != _octave_shape(expected) or len(actual_values) != len(expected_values):
+        return False
+    for actual, target in zip(actual_values, expected_values, strict=True):
+        if math.isnan(target):
+            if not math.isnan(actual):
+                return False
+        elif not math.isfinite(actual) or abs(actual - target) > tolerance * max(1.0, abs(target)):
+            return False
+    return True
+
+
+async def execute_candidate_in_sandbox(
+    client: AsyncSandboxClient,
+    sandbox_id: str,
+    task: OctaveData,
+    source: str,
+) -> dict[str, Any]:
+    """Run candidate code where only public code and hidden inputs are present.
+
+    The trusted task process retains expected outputs and computes pass/fail
+    after decoding the candidate's shape/value report. This keeps both hidden
+    values and score state outside the interpreter executing model code.
+    """
+    result_token = new_result_token()
+    await client.upload_bytes(
+        sandbox_id,
+        f"/sandbox-workspace/task/{task.fn_name}.m",
+        source.encode(),
+        f"{task.fn_name}.m",
+    )
+    await client.upload_bytes(
+        sandbox_id,
+        "/sandbox-workspace/task/run_candidate.m",
+        build_candidate_runner(
+            task.model_dump(),
+            result_token=result_token,
+        ).encode(),
+        "run_candidate.m",
+    )
+    proc = await client.execute_command(
+        sandbox_id,
+        "octave --no-gui --quiet run_candidate.m 2>&1",
+        working_dir="/sandbox-workspace/task",
+        timeout=60,
+    )
+    output = (proc.stdout or "") + (proc.stderr or "")
+    records = parse_candidate_records(
+        output,
+        expected_total=len(task.cases),
+        result_token=result_token,
+    )
+    passed = (
+        sum(
+            candidate_record_matches(
+                record,
+                expected=case["expected"],
+                tolerance=task.tolerance,
+            )
+            for record, case in zip(records, task.cases, strict=True)
+        )
+        if records is not None
+        else 0
+    )
+    total = len(task.cases)
+    return {
+        "passed": passed,
+        "total": total,
+        "fraction": passed / total if total else 0.0,
+        "structured_result": float(records is not None),
+        "exit_code": proc.exit_code,
+        "feedback": output[-2000:],
+    }
+
+
+async def execute_candidate_in_new_sandbox(
+    task: OctaveData,
+    source: str,
+) -> dict[str, Any]:
+    """Provision and always tear down one isolated candidate sandbox."""
+    client = AsyncSandboxClient()
+    sandbox_id: str | None = None
+    try:
+        sandbox = await client.create(CreateSandboxRequest(
+            name=f"octave-candidate-{task.idx}",
+            docker_image=OCTAVE_IMAGE,
+            start_command="tail -f /dev/null",
+            cpu_cores=1,
+            memory_gb=2,
+            disk_size_gb=5,
+            timeout_minutes=15,
+            labels=["octave-rl-candidate"],
+        ))
+        sandbox_id = sandbox.id
+        await client.wait_for_creation(sandbox_id)
+        await client.execute_command(sandbox_id, "mkdir -p /sandbox-workspace/task")
+        return await execute_candidate_in_sandbox(client, sandbox_id, task, source)
+    finally:
+        if sandbox_id is not None:
+            await client.delete(sandbox_id)
 
 
 class OctaveState(vf.State):
@@ -69,7 +234,7 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 for line in feedback.splitlines()
                 if line.strip()
                 and not line.startswith("CASE ")
-                and not line.startswith("RESULT ")
+                and not line.startswith(CANDIDATE_RESULT_MARKER_PREFIX)
             ),
             "Some hidden cases still fail.",
         )
@@ -104,9 +269,16 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
 
     async def setup_task(self, task: OctaveData) -> None:
         self.task = task
+
+    async def _ensure_feedback_sandbox(self) -> None:
+        """Start the feedback runner only after a retry actually needs it."""
+        if self.client is not None and self.sandbox_id is not None:
+            return
+        if self.task is None:
+            raise RuntimeError("Octave task data was not provided")
         self.client = AsyncSandboxClient()
         sandbox = await self.client.create(CreateSandboxRequest(
-            name=f"octave-feedback-{task.idx}",
+            name=f"octave-feedback-{self.task.idx}",
             docker_image=OCTAVE_IMAGE,
             start_command="tail -f /dev/null",
             cpu_cores=1,
@@ -116,17 +288,24 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
             labels=["octave-rl-feedback"],
         ))
         self.sandbox_id = sandbox.id
+        self._exit_stack.push_async_callback(self.client.delete, self.sandbox_id)
         await self.client.wait_for_creation(self.sandbox_id)
         await self.client.execute_command(
             self.sandbox_id, "mkdir -p /sandbox-workspace/task"
         )
-        self._exit_stack.push_async_callback(self.client.delete, self.sandbox_id)
 
     async def respond(self, message: str) -> vf.Messages:
         if self.task is None:
             raise RuntimeError("Octave task data was not provided")
-        code = extract_code(message)
         self.state.attempts += 1
+        if self.config.max_attempts == 1:
+            # Final scoring runs the candidate in the task runtime. A one-turn
+            # evaluation has no consumer for feedback, so avoid provisioning a
+            # second Octave Sandbox solely to construct a reply that cannot be
+            # acted on.
+            self.state.done = True
+            return [{"role": "user", "content": "No retry is available."}]
+        code = extract_code(message)
         if not code:
             result = {
                 "passed": 0,
@@ -134,34 +313,14 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 "feedback": "Expected one fenced or bare GNU Octave function.",
             }
         else:
-            if self.client is None or self.sandbox_id is None:
-                raise RuntimeError("feedback sandbox was not created")
-            await self.client.upload_bytes(
+            await self._ensure_feedback_sandbox()
+            assert self.client is not None and self.sandbox_id is not None
+            result = await execute_candidate_in_sandbox(
+                self.client,
                 self.sandbox_id,
-                f"/sandbox-workspace/task/{self.task.fn_name}.m",
-                code.encode(),
-                f"{self.task.fn_name}.m",
+                self.task,
+                code,
             )
-            await self.client.upload_bytes(
-                self.sandbox_id,
-                "/sandbox-workspace/task/run_cases.m",
-                build_harness(self.task.model_dump()).encode(),
-                "run_cases.m",
-            )
-            proc = await self.client.execute_command(
-                self.sandbox_id,
-                "octave --no-gui --quiet run_cases.m 2>&1",
-                working_dir="/sandbox-workspace/task",
-                timeout=60,
-            )
-            feedback = (proc.stdout or "") + (proc.stderr or "")
-            match = RESULT_RE.search(feedback)
-            passed, total = (
-                tuple(map(int, match.groups()))
-                if match
-                else (0, len(self.task.cases))
-            )
-            result = {"passed": passed, "total": total, "feedback": feedback}
         solved = result["passed"] == result["total"]
         if solved or self.state.attempts >= self.config.max_attempts:
             self.state.done = True
@@ -191,44 +350,19 @@ class OctaveTaskConfig(vf.TaskConfig):
 
 
 class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
-    NEEDS_CONTAINER = True
+    NEEDS_CONTAINER = False
     user = OctaveUser
 
     @vf.stop
     async def attempts_complete(self, trace: vf.Trace) -> bool:
         return trace.state.done
 
-    async def _execute(self, source: str, runtime: vf.Runtime) -> dict[str, Any]:
-        fn_file = f"{self.data.fn_name}.m"
-        await runtime.write(fn_file, source.encode())
-        await runtime.write("run_cases.m", build_harness(self.data.model_dump()).encode())
-        result = await runtime.run(
-            ["sh", "-c", "octave --no-gui --quiet run_cases.m 2>&1"], {}
-        )
-        output = result.stdout + result.stderr
-        match = RESULT_RE.search(output)
-        passed, total = (
-            tuple(map(int, match.groups()))
-            if match
-            else (0, len(self.data.cases))
-        )
-        manifest = await runtime.run(
-            ["sh", "-c", "find . -maxdepth 1 -type f -printf '%f\\n' | sort"], {}
-        )
-        allowed = {fn_file, "run_cases.m"}
-        return {
-            "passed": passed,
-            "total": total,
-            "fraction": passed / total if total else 0.0,
-            "ran": float(match is not None),
-            "tampering": float(bool(set(manifest.stdout.splitlines()) - allowed)),
-            "exit_code": result.exit_code,
-            "feedback": output[-2000:],
-        }
+    async def _execute(self, source: str) -> dict[str, Any]:
+        return await execute_candidate_in_new_sandbox(self.data, source)
 
     async def validate(self, runtime: vf.Runtime) -> bool:
-        result = await self._execute(self.data.reference, runtime)
-        return result["fraction"] == 1.0 and result["exit_code"] == 0
+        result = await self._execute(self.data.reference)
+        return result["fraction"] == 1.0 and result["structured_result"] == 1.0
 
     async def finalize(self, trace: vf.Trace, runtime: vf.Runtime) -> None:
         code = extract_code(trace.last_reply or "")
@@ -237,28 +371,22 @@ class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
                 "passed": 0,
                 "total": len(self.data.cases),
                 "fraction": 0.0,
-                "ran": 0.0,
-                "tampering": 0.0,
+                "structured_result": 0.0,
                 "exit_code": -1,
                 "feedback": "Expected exactly one fenced octave code block.",
             }
             return
-        trace.info["octave"] = await self._execute(code, runtime)
+        trace.info["octave"] = await self._execute(code)
         trace.info["submitted_source"] = code
 
     @vf.reward(weight=1.0)
     async def case_fraction(self, trace: vf.Trace) -> float:
         raw = float(trace.info["octave"]["fraction"])
-        attempts = max(1, trace.state.attempts)
-        if attempts >= 3:
-            return raw * self.config.guided_attempt_multiplier
-        if attempts == 2:
-            return raw * self.config.second_attempt_multiplier
-        return raw
-
-    @vf.reward(weight=0.1)
-    async def runs_without_error(self, trace: vf.Trace) -> float:
-        return float(trace.info["octave"]["ran"])
+        return raw * attempt_multiplier(
+            attempts=max(1, trace.state.attempts),
+            second_attempt_multiplier=self.config.second_attempt_multiplier,
+            guided_attempt_multiplier=self.config.guided_attempt_multiplier,
+        )
 
     @vf.metric
     async def vectorized(self, trace: vf.Trace) -> float:
@@ -270,10 +398,6 @@ class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
     @vf.metric
     async def format_ok(self, trace: vf.Trace) -> float:
         return float(format_ok(trace.last_reply or ""))
-
-    @vf.metric
-    async def tampering_detected(self, trace: vf.Trace) -> float:
-        return float(trace.info["octave"]["tampering"])
 
     @vf.metric
     async def raw_case_fraction(self, trace: vf.Trace) -> float:

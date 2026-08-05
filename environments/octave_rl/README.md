@@ -37,9 +37,10 @@ reference function.
 
 ## Reward and multi-turn policy
 
-`case_fraction` is the fraction of hidden cases passed. A valid structured
-Octave run adds a small `0.1` reward. Formatting and vectorization are observed
-as metrics rather than hard gates.
+`case_fraction` is the only reward: the fraction of hidden cases passed.
+Attempts 2 and 3 discount that correctness by `0.85` and `0.60`. There is no
+bonus for execution, formatting, or a candidate-controlled result report.
+Formatting and vectorization are observed as metrics rather than hard gates.
 
 The optional user simulator runs the submitted function after each attempt:
 
@@ -82,6 +83,13 @@ On the pinned image:
 - uploading `.m` files avoids nested shell-quoting problems;
 - warmed Octave script startup was roughly 0.3 seconds.
 
-An uncaught assertion did exit 1 in the tested image, but the environment does
-not rely on that version-sensitive behavior. It parses the machine-readable
-`RESULT passed=N total=M` line and uses explicit harness exit status.
+An uncaught assertion did exit 1 in the tested image. Scoring does not use
+exit status. The candidate sandbox receives only the candidate function, a
+generated input-only runner, and hidden inputs. It serializes each attempted
+output's shape and flattened numeric values in a terminal
+`__OCTAVE_CANDIDATE_RESULT__...` transport record. The trusted Python task
+process keeps expected outputs and pass counters outside that sandbox, validates
+the report, and applies the shape/tolerance comparison itself. Thus candidate
+stdout can never directly set a score. `run_cases.m` and its
+`__OCTAVE_HARNESS_RESULT__` protocol remain only in the separate trusted
+reference-pool validator, where the executed function is repository-owned.

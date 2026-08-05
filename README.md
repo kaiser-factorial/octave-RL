@@ -197,18 +197,23 @@ uv run python scripts/curriculum_controller.py render \
   --target-step 5 \
   --eval-interval 5 \
   --eval-examples 20 \
-  --disable-integrated-eval \
   --batch-size 8 \
   --group-size 2 \
   --max-inflight-rollouts 2 \
   --config /path/to/run/octave-staged.generated.toml
 ```
 
-The stable Qwen path uses short train-only chunks, statically merges the LoRA
-adapter, evaluates the merged checkpoint on disjoint held-out tasks, and then
-ingests those traces into the controller. This avoids the shared inference
-concurrency failure observed during integrated evaluation. Promotion depends
-only on held-out results, never training-batch reward.
+The stable Qwen path uses the controller's default one-chunk train-only run,
+statically merges the LoRA adapter, evaluates the merged checkpoint on disjoint
+held-out tasks, and then ingests those traces into the controller. This avoids
+the shared inference concurrency failure observed during integrated evaluation.
+Promotion depends only on held-out results, never training-batch reward.
+
+The reward protocol was hardened after the historical runs: it now rewards only
+case-level correctness, so a correct first attempt is exactly `1.0`. Candidate
+execution reports values only; the trusted task process retains expected values
+and computes the score outside the candidate sandbox. Use
+`raw_case_fraction` when comparing historical traces with future runs.
 
 Read [CURRICULUM.md](CURRICULUM.md) before running this path. It documents the
 promotion/demotion thresholds, Wilson-bound gate, sparse evaluation strategy,

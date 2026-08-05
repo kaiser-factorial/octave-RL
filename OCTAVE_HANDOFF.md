@@ -1,6 +1,6 @@
 # Octave RL handoff
 
-Last updated: 2026-07-30
+Last updated: 2026-08-05
 
 This is the shortest trustworthy orientation for continuing the Octave RL
 work. Read `README.md` for the repository map, `REPORT.md` for the full
@@ -43,7 +43,7 @@ the authorized $20 ceiling.
   Octave code generation.
 - Added ten deterministic task families across three difficulty levels.
 - Generated 500 tasks per level with six hidden cases per task.
-- Preserved case-level partial credit, a small execution bonus, retry
+- Preserved case-level partial credit, correctness-only reward, retry
   diagnostics, and raw correctness as a separate metric.
 - Validated all 1,500 reference tasks: 9,000/9,000 hidden cases passed in the
   pinned GNU Octave 10.2.0 runtime.
@@ -178,8 +178,31 @@ CUDA, PyTorch, the GPU type, or the model checkpoint changes.
 
 An eval environment's `multiplex = 1` does not limit prime-rl's global shared
 dispatcher. Integrated evaluation still launched eight requests concurrently.
-Use `--disable-integrated-eval`, stop at a checkpoint, merge the adapter, and
-evaluate a static policy at concurrency one.
+The controller now defaults to one train-only chunk per invocation. Stop at a
+checkpoint, merge the adapter, and evaluate a static policy at concurrency
+one; pass `--integrated-eval` only after a separate concurrency validation.
+
+### Reward protocol is correctness-only and host-scored
+
+The pre-2026-08-05 environment added a flat `0.1` reward whenever stdout
+contained a `RESULT` marker, which let a fully correct first attempt reach
+`1.1` and left its parser susceptible to marker spoofing. The current
+environment rewards only case-level correctness, discounted for later
+attempts. Its candidate sandbox receives no expected outputs or pass counters:
+it reports values, while the trusted Python task process compares those values
+with hidden expected outputs. Raw correctness remains the only
+cross-run/curriculum comparison metric; historical shaped rewards are not
+directly comparable to new ones.
+
+### CPU Sandbox egress is not currently configurable
+
+The installed `prime_sandboxes` CPU request model does not serialize a
+`network_access` setting; its allow/deny-list fields are accepted only for
+`vm=True`. Do not claim egress isolation for the current CPU Octave runner.
+The scoring boundary remains sound because candidate Sandboxes receive no
+credentials, expected outputs, reference source, or pass counters. If a future
+deployment requires outbound-network denial as a separate policy, migrate this
+runner to a supported VM configuration and verify that policy on the live API.
 
 ### Keep gates policy-consistent
 

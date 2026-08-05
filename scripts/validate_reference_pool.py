@@ -15,7 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "environments" / "octave_rl"))
 
 from generators import build_tasks
-from harness import OCTAVE_IMAGE, RESULT_RE, build_harness
+from harness import (
+    OCTAVE_IMAGE,
+    build_harness,
+    new_result_token,
+    parse_harness_result,
+)
 from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
 
 
@@ -53,7 +58,7 @@ async def validate_level(
             await client.upload_bytes(
                 sandbox.id,
                 "/sandbox-workspace/task/run_cases.m",
-                build_harness(info).encode(),
+                build_harness(info, result_token := new_result_token()).encode(),
                 "run_cases.m",
             )
             proc = await client.execute_command(
@@ -63,10 +68,12 @@ async def validate_level(
                 timeout=60,
             )
             output = (proc.stdout or "") + (proc.stderr or "")
-            match = RESULT_RE.search(output)
-            passed, total = (
-                tuple(map(int, match.groups())) if match else (0, len(info["cases"]))
+            parsed = parse_harness_result(
+                output,
+                expected_total=len(info["cases"]),
+                result_token=result_token,
             )
+            passed, total = parsed or (0, len(info["cases"]))
             if passed != total:
                 failures.append(
                     {

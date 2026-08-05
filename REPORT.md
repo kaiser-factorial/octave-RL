@@ -31,16 +31,19 @@ set remains too small for a precise capability estimate.
 
 Each prompt asks for one named Octave function with an exact signature. The
 model returns one fenced function; the environment writes the source to the
-matching filename, generates `run_cases.m`, and invokes:
+matching filename, generates an input-only `run_candidate.m`, and invokes:
 
 ```bash
-octave --no-gui --quiet run_cases.m 2>&1
+octave --no-gui --quiet run_candidate.m 2>&1
 ```
 
-The harness prints a structured `RESULT passed=P total=N` line. Scoring parses
-that line instead of inferring correctness from process exit status, enabling
-case-level partial credit even when the candidate raises an error on some
-inputs.
+The candidate runner contains hidden inputs but never hidden expected outputs
+or pass counters. It prints a terminal namespaced transport record containing
+each attempted output's shape and flattened numeric values. The trusted Python
+task process retains expected values and compares them after parsing that
+report, so an untrusted candidate cannot read or overwrite scoring state. This
+preserves case-level partial credit even when the candidate raises on some
+inputs, without allowing candidate stdout to supply a score.
 
 | Property | Implementation |
 | --- | --- |
@@ -53,13 +56,17 @@ inputs.
 | Default tasks per level | 500 |
 | Sandbox limits | 1 CPU, 2 GB memory, 5 GB disk |
 | Correctness reward | fraction of hidden cases passed |
-| Execution bonus | 0.1 when a structured result is produced |
+| Execution shaping | none; only hidden-case correctness is rewarded |
 | Retry multipliers | 1.00 / 0.85 / 0.60 |
 
-The execution bonus is deliberately small and cannot make an incorrect
-program look solved. Raw correctness remains available as
-`raw_case_fraction`, while the optimized reward preserves a gradient between a
-syntax/runtime failure and a well-formed program that reaches the harness.
+Raw correctness remains available as `raw_case_fraction`. The optimized reward
+is that correctness times the attempt multiplier: `1.00`, `0.85`, or `0.60`.
+There is deliberately no executable-program or structured-output bonus because
+candidate code controls its own process output.
+
+Runs recorded before this protocol hardening used an execution bonus. Compare
+historical and future model capability only through `raw_case_fraction`, not
+shaped training reward.
 
 ## Curriculum
 
@@ -77,8 +84,9 @@ syntax/runtime failure and a well-formed program that reaches the harness.
 | `signal_identity` | circular shift | FFT autocorrelation | FFT autocorrelation, no loops |
 
 The generator is deterministic for `(level, seed, task index)`. Expected
-values are calculated by NumPy before rollout and serialized into the harness;
-reference code is never included in model-visible task data.
+values are calculated by NumPy before rollout and retained by the trusted task
+process; reference code is never included in model-visible task data or the
+candidate sandbox.
 
 This first RL run trained only on Level 1. It did not mix levels: the measured
 7% Level 2 and 0% Level 3 baselines are too sparse for an efficient initial

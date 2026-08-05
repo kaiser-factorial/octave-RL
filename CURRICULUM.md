@@ -20,12 +20,12 @@ is recorded by prime-rl but is not a promotion input.
 
 For this Qwen3.5/vLLM stack, held-out generation is run against a statically
 merged checkpoint after the training process exits. The environment-level
-`multiplex = 1` setting does not cap prime-rl's shared dispatcher: its global
-`max_inflight_rollouts` remains tied to the GRPO group size of eight. A live
+`multiplex = 1` setting does not cap prime-rl's shared dispatcher. A live
 startup evaluation therefore launched eight long generations concurrently,
-the same pattern that had reproduced a hybrid-attention worker fault. Static
-serving lets each held-out worker use concurrency one without reducing the
-training group size or allowing weight broadcasts during an evaluation.
+the same pattern that had reproduced a hybrid-attention worker fault. Generated
+configs now default to train-only chunks, GRPO groups of two, and at most two
+inflight rollouts; static serving then evaluates each held-out worker at
+concurrency one.
 
 The generated config evaluates only levels required by the current gate:
 Level 1 alone initially, Levels 1–2 while Level 2 can trigger a transition,
@@ -194,15 +194,17 @@ uv run python scripts/curriculum_controller.py run \
   --budget-usd 20
 ```
 
-On the tested Qwen stack, add `--disable-integrated-eval`, stop after one
-chunk, merge its adapter, and run checkpoint-static held-out evaluation before
-rebasing into the next output directory. This is the stable real-training
-path; the integrated mode remains useful on runtimes that safely support its
-shared inference concurrency.
+On the tested Qwen stack, the controller's default train-only mode is the
+stable path: it returns after one durable chunk, so merge its adapter and run
+checkpoint-static held-out evaluation before rebasing into the next output
+directory. Pass `--integrated-eval` only on a runtime that has separately
+demonstrated safe shared inference concurrency. `--continue-train-only` is an
+explicit expert override; it does not permit curriculum transitions until
+static traces are later ingested.
 
-If the Qwen GDN worker is unstable at eight simultaneous requests, preserve an
-eight-rollout optimizer batch while using two-rollout GRPO groups and admitting
-only two requests at once:
+The safe defaults preserve an eight-rollout optimizer batch while using
+two-rollout GRPO groups and admitting only two requests at once. To override
+them explicitly:
 
 ```bash
   --batch-size 8 \

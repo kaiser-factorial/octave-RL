@@ -28,6 +28,11 @@ and checkpoint retrieval.
 The source config is
 `configs/prime-rl/octave-qwen-4b-20step.toml`.
 
+This is a historical execution record. The current environment uses a
+correctness-only reward protocol and the curriculum controller defaults to
+train-only, two-inflight operation; do not use this config as the continuation
+launch configuration.
+
 ## Live compute envelope observed on 2026-07-29
 
 The initially selected spot 2x A100 80GB pod was approximately `$1.253/hour`,

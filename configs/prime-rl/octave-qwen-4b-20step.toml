@@ -1,3 +1,7 @@
+# Historical reproduction config, retained for the completed 20-step run.
+# Do not use it for the current continuation: its group-size-eight integrated
+# eval is unsafe on the tested Qwen/vLLM stack. Generate a train-only config
+# through scripts/curriculum_controller.py instead.
 # Validated against prime-rl at commit
 # 44539229436a23e624b0f39826014a4e58a703be with verifiers 0.2.1.
 # Later prime-rl main uses the post-User interleaving-agent API and is not
