@@ -1,0 +1,68 @@
+{
+  "image": "ghcr.io/gnu-octave/octave:10.2.0",
+  "levels": [
+    {
+      "level": 1,
+      "tasks": 500,
+      "cases": 3000,
+      "seed": 0,
+      "family_counts": {
+        "broadcast_arith": 50,
+        "linsolve_tolerance": 50,
+        "logical_index": 50,
+        "reduce_along_dim": 50,
+        "reshape_permute": 50,
+        "sequence_recurrence": 50,
+        "signal_identity": 50,
+        "sliding_window": 50,
+        "string_parse": 50,
+        "struct_cell_wrangle": 50
+      },
+      "failures": [],
+      "elapsed_seconds": 275.204
+    },
+    {
+      "level": 2,
+      "tasks": 500,
+      "cases": 3000,
+      "seed": 0,
+      "family_counts": {
+        "broadcast_arith": 50,
+        "linsolve_tolerance": 50,
+        "logical_index": 50,
+        "reduce_along_dim": 50,
+        "reshape_permute": 50,
+        "sequence_recurrence": 50,
+        "signal_identity": 50,
+        "sliding_window": 50,
+        "string_parse": 50,
+        "struct_cell_wrangle": 50
+      },
+      "failures": [],
+      "elapsed_seconds": 262.497
+    },
+    {
+      "level": 3,
+      "tasks": 500,
+      "cases": 3000,
+      "seed": 0,
+      "family_counts": {
+        "broadcast_arith": 50,
+        "linsolve_tolerance": 50,
+        "logical_index": 50,
+        "reduce_along_dim": 50,
+        "reshape_permute": 50,
+        "sequence_recurrence": 50,
+        "signal_identity": 50,
+        "sliding_window": 50,
+        "string_parse": 50,
+        "struct_cell_wrangle": 50
+      },
+      "failures": [],
+      "elapsed_seconds": 272.239
+    }
+  ],
+  "total_tasks": 1500,
+  "total_cases": 9000,
+  "total_failures": 0
+}

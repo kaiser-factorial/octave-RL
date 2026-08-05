@@ -1,0 +1,21 @@
+[project]
+name = "octave-rl"
+description = "Seeded GNU Octave coding curriculum with deterministic fractional rewards"
+tags = ["octave", "code", "rl", "train", "eval"]
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "verifiers>=0.2.1,<0.3",
+    "numpy>=2.0,<3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["octave_rl.py", "generators.py", "harness.py", "pyproject.toml"]
+
+[tool.verifiers.eval]
+num_examples = 5
+rollouts_per_example = 3

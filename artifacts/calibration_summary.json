@@ -1,0 +1,37 @@
+{
+  "model_size_ladder": [
+    {
+      "model": "Qwen/Qwen3.5-0.8B",
+      "level": 1,
+      "n": 10,
+      "raw_mean": 0.0
+    },
+    {
+      "model": "Qwen/Qwen3.5-2B",
+      "level": 1,
+      "n": 10,
+      "raw_mean": 0.0
+    },
+    {
+      "model": "Qwen/Qwen3.5-4B",
+      "level": 1,
+      "n": 10,
+      "raw_mean": 0.1
+    }
+  ],
+  "matched_retry_sample": {
+    "model": "Qwen/Qwen3.5-4B",
+    "level": 1,
+    "n": 10,
+    "raw_mean_by_attempt": [
+      0.2,
+      0.2,
+      0.4
+    ],
+    "correctness_multiplier_by_attempt": [
+      1.0,
+      0.85,
+      0.6
+    ]
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "date_utc": "2026-07-30",
+  "model": "Qwen/Qwen3.5-4B",
+  "hardware": "2x RTX 6000 Ada 48GB",
+  "estimated_pod_hours": 9.18,
+  "estimated_compute_usd": 13.77,
+  "compute_budget_usd": 20.0,
+  "curriculum_transition": {
+    "global_step": 15,
+    "from": "level1_only",
+    "to": "introduce_level2",
+    "reason": "level1_mastery",
+    "ratios_after": {
+      "level1": 0.8,
+      "level2": 0.2,
+      "level3": 0.0
+    }
+  },
+  "heldout": [
+    {
+      "global_step": 10,
+      "level": 1,
+      "examples": 24,
+      "raw_case_fraction": 0.75,
+      "first_attempt_success": 0.5416666666666666,
+      "eventual_success": 0.75,
+      "average_attempts": 1.7916666666666667,
+      "truncation_rate": 0.2916666666666667,
+      "error_rate": 0.0,
+      "wilson_lower_one_sided_95": 0.5845
+    },
+    {
+      "global_step": 15,
+      "level": 1,
+      "examples": 24,
+      "raw_case_fraction": 0.75,
+      "first_attempt_success": 0.5416666666666666,
+      "eventual_success": 0.75,
+      "average_attempts": 1.8333333333333333,
+      "truncation_rate": 0.20833333333333334,
+      "error_rate": 0.0,
+      "wilson_lower_one_sided_95": 0.5845
+    }
+  ],
+  "post_transition_optimizer_steps": [
+    {
+      "global_step": 16,
+      "local_step": 1,
+      "trainer_seconds": 929,
+      "loss": 0.0016,
+      "entropy": 0.7553,
+      "mismatch_kl": 0.0359,
+      "grad_norm": 0.0369,
+      "effective_rollouts": {
+        "level1": {
+          "examples": 2,
+          "raw_case_fraction": 0.0
+        },
+        "level2": {
+          "examples": 4,
+          "raw_case_fraction": 0.75
+        }
+      }
+    },
+    {
+      "global_step": 17,
+      "local_step": 2,
+      "trainer_seconds": 908,
+      "loss": 0.0078,
+      "entropy": 0.7931,
+      "mismatch_kl": 0.0413,
+      "grad_norm": 0.0742,
+      "effective_rollouts": {
+        "level1": {
+          "examples": 6,
+          "raw_case_fraction": 0.3333333333333333
+        }
+      }
+    }
+  ],
+  "salvaged_adapter": {
+    "local_step": 2,
+    "global_step": 17,
+    "stable_marker_present": true,
+    "sha256": "a797cd911c69a54590f20994d70c5b41b2247477b45274907e79d61ae687b78e",
+    "path": "octave-real-segment-15-25-c2/run_default/broadcasts/step_2/adapter_model.safetensors",
+    "requires_base": "octave-staged-qwen/weights/step_15_merged",
+    "required_base_retained_locally": false,
+    "deployable_from_local_artifacts": false,
+    "disposition": "retain as training evidence; do not merge into the original step-20 base"
+  },
+  "stopping_condition": {
+    "reason": "Prime Sandbox returned Payment required during the third post-transition batch",
+    "partial_step_excluded": 18,
+    "partial_trace_rows": 326,
+    "partial_rows_with_errors": 324,
+    "post_transition_heldout_available": false
+  },
+  "pod_terminated": true,
+  "active_pods_after_cleanup": 0
+}

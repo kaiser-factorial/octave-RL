@@ -1,0 +1,167 @@
+{
+  "model": "Qwen/Qwen3.5-4B",
+  "seed": 20260729,
+  "valid_rollouts": 200,
+  "infrastructure_errors": 0,
+  "overall": {
+    "n": 200,
+    "mean_raw_case_fraction": 0.1758333333333333,
+    "fully_solved": 33,
+    "partially_solved": 5,
+    "zero": 162,
+    "distribution": {
+      "0.000000": 162,
+      "0.166667": 1,
+      "0.333333": 2,
+      "0.500000": 1,
+      "0.833333": 1,
+      "1.000000": 33
+    }
+  },
+  "by_level": {
+    "1": {
+      "n": 100,
+      "mean_raw_case_fraction": 0.2816666666666667,
+      "fully_solved": 26,
+      "partially_solved": 5,
+      "zero": 69,
+      "distribution": {
+        "0.000000": 69,
+        "0.166667": 1,
+        "0.333333": 2,
+        "0.500000": 1,
+        "0.833333": 1,
+        "1.000000": 26
+      }
+    },
+    "2": {
+      "n": 100,
+      "mean_raw_case_fraction": 0.07,
+      "fully_solved": 7,
+      "partially_solved": 0,
+      "zero": 93,
+      "distribution": {
+        "0.000000": 93,
+        "1.000000": 7
+      }
+    }
+  },
+  "by_family": {
+    "broadcast_arith": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.2,
+      "fully_solved": 4,
+      "partially_solved": 0,
+      "zero": 16,
+      "distribution": {
+        "0.000000": 16,
+        "1.000000": 4
+      }
+    },
+    "linsolve_tolerance": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.05,
+      "fully_solved": 1,
+      "partially_solved": 0,
+      "zero": 19,
+      "distribution": {
+        "0.000000": 19,
+        "1.000000": 1
+      }
+    },
+    "logical_index": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.35833333333333334,
+      "fully_solved": 6,
+      "partially_solved": 2,
+      "zero": 12,
+      "distribution": {
+        "0.000000": 12,
+        "0.333333": 1,
+        "0.833333": 1,
+        "1.000000": 6
+      }
+    },
+    "reduce_along_dim": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.25,
+      "fully_solved": 5,
+      "partially_solved": 0,
+      "zero": 15,
+      "distribution": {
+        "0.000000": 15,
+        "1.000000": 5
+      }
+    },
+    "reshape_permute": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.35,
+      "fully_solved": 7,
+      "partially_solved": 0,
+      "zero": 13,
+      "distribution": {
+        "0.000000": 13,
+        "1.000000": 7
+      }
+    },
+    "sequence_recurrence": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.1,
+      "fully_solved": 2,
+      "partially_solved": 0,
+      "zero": 18,
+      "distribution": {
+        "0.000000": 18,
+        "1.000000": 2
+      }
+    },
+    "signal_identity": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.05,
+      "fully_solved": 0,
+      "partially_solved": 3,
+      "zero": 17,
+      "distribution": {
+        "0.000000": 17,
+        "0.166667": 1,
+        "0.333333": 1,
+        "0.500000": 1
+      }
+    },
+    "sliding_window": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.0,
+      "fully_solved": 0,
+      "partially_solved": 0,
+      "zero": 20,
+      "distribution": {
+        "0.000000": 20
+      }
+    },
+    "string_parse": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.0,
+      "fully_solved": 0,
+      "partially_solved": 0,
+      "zero": 20,
+      "distribution": {
+        "0.000000": 20
+      }
+    },
+    "struct_cell_wrangle": {
+      "n": 20,
+      "mean_raw_case_fraction": 0.4,
+      "fully_solved": 8,
+      "partially_solved": 0,
+      "zero": 12,
+      "distribution": {
+        "0.000000": 12,
+        "1.000000": 8
+      }
+    }
+  },
+  "trace_files": [
+    "outputs/distribution/qwen-4b-level1/traces.jsonl",
+    "outputs/distribution/qwen-4b-level2/traces.jsonl"
+  ]
+}

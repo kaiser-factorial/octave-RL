@@ -1,0 +1,144 @@
+{
+  "definition": "A task is constant-solvable only if all six precomputed expected outputs are exactly identical.",
+  "seed": 0,
+  "levels": {
+    "1": {
+      "tasks": 500,
+      "constant_solvable_tasks": 0,
+      "by_family": {
+        "broadcast_arith": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "linsolve_tolerance": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "logical_index": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "reduce_along_dim": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "reshape_permute": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "sequence_recurrence": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "signal_identity": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "sliding_window": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "string_parse": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "struct_cell_wrangle": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        }
+      }
+    },
+    "2": {
+      "tasks": 500,
+      "constant_solvable_tasks": 0,
+      "by_family": {
+        "broadcast_arith": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "linsolve_tolerance": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "logical_index": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "reduce_along_dim": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "reshape_permute": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "sequence_recurrence": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "signal_identity": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "sliding_window": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "string_parse": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "struct_cell_wrangle": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        }
+      }
+    },
+    "3": {
+      "tasks": 500,
+      "constant_solvable_tasks": 0,
+      "by_family": {
+        "broadcast_arith": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "linsolve_tolerance": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "logical_index": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "reduce_along_dim": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "reshape_permute": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "sequence_recurrence": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "signal_identity": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "sliding_window": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "string_parse": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        },
+        "struct_cell_wrangle": {
+          "tasks": 50,
+          "constant_solvable_tasks": 0
+        }
+      }
+    }
+  }
+}

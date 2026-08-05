@@ -1,0 +1,46 @@
+{
+  "current_step": 5,
+  "evaluations": [
+    {
+      "levels": {
+        "1": {
+          "average_attempts": 2.9,
+          "error_rate": 0.0,
+          "eventual_success": 0.4,
+          "examples": 20,
+          "first_attempt_success": 0.0,
+          "level": 1,
+          "raw_case_fraction": 0.4,
+          "truncation_rate": 1.0
+        },
+        "2": {
+          "average_attempts": 2.7,
+          "error_rate": 0.0,
+          "eventual_success": 0.35,
+          "examples": 20,
+          "first_attempt_success": 0.0,
+          "level": 2,
+          "raw_case_fraction": 0.35,
+          "truncation_rate": 0.9
+        },
+        "3": {
+          "average_attempts": 2.5,
+          "error_rate": 0.0,
+          "eventual_success": 0.45,
+          "examples": 20,
+          "first_attempt_success": 0.1,
+          "level": 3,
+          "raw_case_fraction": 0.45,
+          "truncation_rate": 0.9
+        }
+      },
+      "step": 1
+    }
+  ],
+  "observed_steps": [
+    1
+  ],
+  "stage_index": 0,
+  "transitions": [],
+  "version": 1
+}

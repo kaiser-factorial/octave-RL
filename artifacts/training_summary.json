@@ -1,0 +1,254 @@
+{
+  "completed_steps": 20,
+  "reward_non_flat": true,
+  "train_reward": [
+    {
+      "step": 1,
+      "reward": 0.0125
+    },
+    {
+      "step": 2,
+      "reward": 0.05
+    },
+    {
+      "step": 3,
+      "reward": 0.0125
+    },
+    {
+      "step": 4,
+      "reward": 0.025
+    },
+    {
+      "step": 5,
+      "reward": 0.15
+    },
+    {
+      "step": 6,
+      "reward": 0.525
+    },
+    {
+      "step": 7,
+      "reward": 0.0375
+    },
+    {
+      "step": 8,
+      "reward": 0.0125
+    },
+    {
+      "step": 9,
+      "reward": 0.175
+    },
+    {
+      "step": 10,
+      "reward": 0.0375
+    },
+    {
+      "step": 11,
+      "reward": 0.175
+    },
+    {
+      "step": 12,
+      "reward": 0.0375
+    },
+    {
+      "step": 13,
+      "reward": 0.7875
+    },
+    {
+      "step": 14,
+      "reward": 0.0375
+    },
+    {
+      "step": 15,
+      "reward": 0.15
+    },
+    {
+      "step": 16,
+      "reward": 0.2188
+    },
+    {
+      "step": 17,
+      "reward": 0.4
+    },
+    {
+      "step": 18,
+      "reward": 0.1125
+    },
+    {
+      "step": 19,
+      "reward": 0.5312
+    },
+    {
+      "step": 20,
+      "reward": 0.7
+    }
+  ],
+  "heldout_reward": [
+    {
+      "step": 1,
+      "reward": 0.01
+    },
+    {
+      "step": 5,
+      "reward": 0.07
+    },
+    {
+      "step": 10,
+      "reward": 0.01
+    },
+    {
+      "step": 15,
+      "reward": 0.38
+    },
+    {
+      "step": 20,
+      "reward": 0.905
+    }
+  ],
+  "optimizer": [
+    {
+      "step": 1,
+      "loss": 0.0,
+      "entropy": 0.8039,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.006
+    },
+    {
+      "step": 2,
+      "loss": -0.0001,
+      "entropy": 0.717,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.009
+    },
+    {
+      "step": 3,
+      "loss": 0.0,
+      "entropy": 0.8033,
+      "mismatch_kl": 0.0005,
+      "grad_norm": 0.0061
+    },
+    {
+      "step": 4,
+      "loss": 0.0,
+      "entropy": 0.718,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0078
+    },
+    {
+      "step": 5,
+      "loss": 0.0037,
+      "entropy": 0.7192,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0442
+    },
+    {
+      "step": 6,
+      "loss": 0.0079,
+      "entropy": 0.7783,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.1108
+    },
+    {
+      "step": 7,
+      "loss": -0.0001,
+      "entropy": 0.7817,
+      "mismatch_kl": 0.0005,
+      "grad_norm": 0.0092
+    },
+    {
+      "step": 8,
+      "loss": 0.0,
+      "entropy": 0.706,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0055
+    },
+    {
+      "step": 9,
+      "loss": 0.003,
+      "entropy": 0.7191,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0454
+    },
+    {
+      "step": 10,
+      "loss": -0.0001,
+      "entropy": 0.7049,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0084
+    },
+    {
+      "step": 11,
+      "loss": 0.0003,
+      "entropy": 0.7361,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0527
+    },
+    {
+      "step": 12,
+      "loss": -0.0001,
+      "entropy": 0.803,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.009
+    },
+    {
+      "step": 13,
+      "loss": 0.0191,
+      "entropy": 0.8105,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.1367
+    },
+    {
+      "step": 14,
+      "loss": 0.0,
+      "entropy": 0.8167,
+      "mismatch_kl": 0.0005,
+      "grad_norm": 0.0095
+    },
+    {
+      "step": 15,
+      "loss": 0.0,
+      "entropy": 0.7278,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0361
+    },
+    {
+      "step": 16,
+      "loss": 0.001,
+      "entropy": 0.7002,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0588
+    },
+    {
+      "step": 17,
+      "loss": 0.007,
+      "entropy": 0.7378,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0718
+    },
+    {
+      "step": 18,
+      "loss": -0.0013,
+      "entropy": 0.7095,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.0425
+    },
+    {
+      "step": 19,
+      "loss": 0.014,
+      "entropy": 0.762,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.106
+    },
+    {
+      "step": 20,
+      "loss": 0.0255,
+      "entropy": 0.7521,
+      "mismatch_kl": 0.0004,
+      "grad_norm": 0.1309
+    }
+  ],
+  "source_logs": {
+    "orchestrator": "artifacts/training/octave-qwen-4b-20step/logs/orchestrator.log",
+    "trainer": "artifacts/training/octave-qwen-4b-20step/logs/trainer.log"
+  }
+}

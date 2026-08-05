@@ -1,0 +1,54 @@
+# Replace this path with a statically merged checkpoint before running.
+model = "/path/to/merged-checkpoint"
+num_tasks = 24
+num_rollouts = 1
+max_concurrent = 8
+push = false
+rich = false
+output_dir = "/path/to/eval-output/standalone-eval-step15"
+max_turns = 3
+max_total_tokens = 6144
+
+[taskset]
+id = "octave-rl"
+level = 1
+num_tasks = 24
+seed = 272828
+
+[taskset.task]
+second_attempt_multiplier = 0.85
+guided_attempt_multiplier = 0.60
+
+[taskset.task.user]
+colocated = false
+max_attempts = 3
+guide_enabled = true
+guide_model = "Qwen/Qwen3.5-35B-A3B"
+
+[harness]
+id = "null"
+
+[harness.runtime]
+type = "prime"
+
+[client]
+type = "train"
+base_url = "http://localhost:8000/v1"
+renderer_model_name = "/path/to/merged-checkpoint"
+pool_size = 8
+
+[client.renderer]
+name = "qwen3.5"
+
+[sampling]
+temperature = 0.0
+max_tokens = 1536
+
+[timeout]
+rollout = 700
+finalize = 120
+scoring = 60
+
+[retries.rollout]
+max_retries = 1
+include = ["ProviderError"]

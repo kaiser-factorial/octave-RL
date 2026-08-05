@@ -1,0 +1,42 @@
+enable_lora = false
+gpu_memory_utilization = 0.85
+api_server_count = 1
+seed = 0
+enable_fp32_lm_head = true
+enable_fp32_router_logits = true
+
+[server]
+port = 8000
+liveness_timeout_seconds = 30.0
+
+[model]
+# Replace this path with a statically merged checkpoint before launching.
+name = "/path/to/merged-checkpoint"
+trust_remote_code = false
+dtype = "auto"
+max_model_len = 4096
+enforce_eager = true
+tool_call_parser = "None"
+reasoning_parser = "None"
+
+[model.vlm]
+vision_encoder_attr = "model.visual"
+language_model_attr = "model.language_model"
+freeze_vision_encoder = true
+
+[parallel]
+tp = 1
+dp = 1
+
+[log]
+level = "info"
+vf_level = "info"
+json_logging = false
+log_data = false
+interval = 10.0
+
+[weight_broadcast]
+type = "filesystem"
+
+[vllm_extra]
+attention_backend = "TRITON_ATTN"

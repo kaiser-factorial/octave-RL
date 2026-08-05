@@ -1,0 +1,19 @@
+[project]
+name = "octave-rl"
+version = "0.1.0"
+description = "Native verifiers.v1 curriculum for training models to write GNU Octave"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "matplotlib>=3.10,<4",
+    "numpy>=2.0,<3",
+    "safetensors>=0.5,<1",
+    "torch>=2.7,<3",
+    "verifiers>=0.2.1,<0.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4,<9",
+    "ruff>=0.12,<1",
+]

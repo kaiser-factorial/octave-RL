@@ -1,0 +1,98 @@
+# macOS
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
+# Secrets and local environment configuration
+.env
+.env.*
+!.env.example
+.envrc
+.direnv/
+
+# Python bytecode, caches, packaging, and test output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+
+# Virtual environments (root or nested)
+.venv/
+venv/
+env/
+ENV/
+
+# Editors and notebooks
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.ipynb_checkpoints/
+
+# Prime Lab projections and machine-local agent files
+/AGENTS.md
+/CLAUDE.md
+/CLAUDE.local.md
+/.prime/
+/.agents/skills/
+/.claude/skills/
+/.cursor/skills/
+/.factory/skills/
+/.opencode/skills/
+/.pi/skills/
+/environments/AGENTS.md
+
+# Evaluation, training, and experiment output
+/outputs/
+/training_outputs/
+/runs/
+/checkpoints/
+/wandb/
+/prime-rl/
+/environments/*/outputs/
+/configs/**/*.generated.toml
+*.log
+*.pid
+
+# Unmodified Prime Lab starter configs target unrelated example environments.
+# Keep the Octave-specific evaluation and native prime-rl configs instead.
+/configs/gepa/
+/configs/rl/
+/configs/eval/gpt-oss.toml
+/configs/eval/llama-3.toml
+/configs/eval/nemotron-3.toml
+/configs/eval/qwen-3-5.toml
+/configs/eval/qwen-3-5-moe.toml
+
+# Model/checkpoint formats should live in external artifact storage
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.bin
+
+# Local raw artifacts contain large weights, logs, rollout traces, and hidden
+# task cases. Compact aggregate JSON/CSV/PNG evidence in artifacts/ remains
+# versioned; these raw experiment trees do not.
+/artifacts/training/
+/artifacts/curriculum/live-2026-07-30/octave-staged-qwen/
+/artifacts/curriculum/live-2026-07-30/octave-real-segment-15-25-c2/
+/artifacts/curriculum/live-2026-07-30/controller/*.log

@@ -1,0 +1,29 @@
+model = "Qwen/Qwen3.5-4B"
+num_tasks = 100
+num_rollouts = 1
+max_concurrent = 10
+push = false
+rich = false
+max_turns = 1
+output_dir = "outputs/distribution/qwen-4b-level2"
+
+[taskset]
+id = "octave-rl"
+level = 2
+num_tasks = 500
+seed = 20260729
+
+[harness]
+id = "null"
+
+[harness.runtime]
+type = "prime"
+
+[timeout]
+rollout = 300.0
+finalize = 120.0
+scoring = 60.0
+
+[sampling]
+reasoning_effort = "none"
+max_tokens = 1024

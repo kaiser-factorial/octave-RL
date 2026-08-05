@@ -1,0 +1,57 @@
+{
+  "checkpoint_step": 0,
+  "current_step": 15,
+  "evaluations": [
+    {
+      "levels": {
+        "1": {
+          "average_attempts": 1.7916666666666667,
+          "error_rate": 0.0,
+          "eventual_success": 0.75,
+          "examples": 24,
+          "first_attempt_success": 0.5416666666666666,
+          "level": 1,
+          "raw_case_fraction": 0.75,
+          "truncation_rate": 0.2916666666666667
+        }
+      },
+      "sources": [
+        "/home/ubuntu/prime-rl/training_outputs/octave-staged-qwen/standalone-eval-staged-step10-c1-n24-v1/traces.jsonl"
+      ],
+      "step": 10
+    },
+    {
+      "levels": {
+        "1": {
+          "average_attempts": 1.8333333333333333,
+          "error_rate": 0.0,
+          "eventual_success": 0.75,
+          "examples": 24,
+          "first_attempt_success": 0.5416666666666666,
+          "level": 1,
+          "raw_case_fraction": 0.75,
+          "truncation_rate": 0.20833333333333334
+        }
+      },
+      "sources": [
+        "/home/ubuntu/prime-rl/training_outputs/octave-staged-qwen/standalone-eval-staged-step15-c1-n24-v1/traces.jsonl"
+      ],
+      "step": 15
+    }
+  ],
+  "observed_steps": [
+    10,
+    15
+  ],
+  "stage_index": 1,
+  "step_offset": 15,
+  "transitions": [
+    {
+      "from": "level1_only",
+      "reason": "level1_mastery",
+      "step": 15,
+      "to": "introduce_level2"
+    }
+  ],
+  "version": 2
+}
