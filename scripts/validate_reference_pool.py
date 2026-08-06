@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "environments" / "octave_rl"))
 from generators import build_tasks
 from harness import (
     OCTAVE_IMAGE,
+    SANDBOX_CREATION_MAX_ATTEMPTS,
     build_harness,
     new_result_token,
     parse_harness_result,
@@ -43,7 +44,10 @@ async def validate_level(
     family_counts: Counter[str] = Counter()
     started = time.monotonic()
     try:
-        await client.wait_for_creation(sandbox.id)
+        await client.wait_for_creation(
+            sandbox.id,
+            max_attempts=SANDBOX_CREATION_MAX_ATTEMPTS,
+        )
         await client.execute_command(sandbox.id, "mkdir -p /sandbox-workspace/task")
         tasks = build_tasks(level, tasks_per_level, seed, False, True)
         for index, task in enumerate(tasks, 1):

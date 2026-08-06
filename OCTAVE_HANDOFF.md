@@ -1,6 +1,6 @@
 # Octave RL handoff
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 This is the shortest trustworthy orientation for continuing the Octave RL
 work. Read `README.md` for the repository map, `REPORT.md` for the full
@@ -8,6 +8,190 @@ experiment narrative, and `CURRICULUM.md` for controller behavior and command
 details.
 
 ## Current status
+
+### 2026-08-06 two-step RTX 6000 Ada continuation — completed and retrieved
+
+Prime Sandbox recovered before provisioning. The exact Level 1 scorer passed
+6/6 hidden cases from the workstation and then passed 6/6 twice from the GPU
+pod. Candidate Octave execution and reward calculation therefore crossed the
+required trusted-runtime gate before training began; the earlier provisioning
+failures were transient Prime Sandbox capacity/scheduler behavior, not an
+Octave-specific incompatibility.
+
+The user authorized a $12 GPU-compute ceiling. Prime provisioned pod
+`4ed655840b504c54ac83ed096cab40d8`, a DataCrunch-backed 2x RTX 6000 Ada 48-GB
+node, from 08:56:10 to approximately 10:32 UTC. At the launch-time conservative
+rate of $2.11/hour including disk, 95.8 minutes is an estimated $3.37. The pod
+and all Sandboxes were terminated after retrieval; final CLI inventories both
+reported zero resources. The mode-0700 pod-only home containing the mode-0600
+minimal Prime config was verified removed before termination.
+
+Including the preceding bounded A6000 gate attempt's estimated $1.97, the two
+pods charged against this $12 authorization total approximately $5.34. The
+older L40S attempt used a separate authorization and is not included here.
+
+The run used the exact prime-rl pin
+`44539229436a23e624b0f39826014a4e58a703be`, `flash-attn` from the locked
+optional-extra wheel, thinking disabled through `Qwen35Renderer`, batch size 8,
+group size 2, maximum two in-flight rollouts, LoRA rank 16, and learning rate
+`1e-5`. Replay remained disabled. A standalone two-request concurrency smoke
+first proved the one-inference-GPU vLLM envelope. The controller then resumed
+from the retained step-20 Qwen policy and completed two train-only optimizer
+steps:
+
+| Step | Effective reward | Trainable | Rollout errors | Truncation | Loss | Mismatch KL |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 0.8000 | 4/8 | 0 | 50% | 0.0866 | 0.0139 |
+| 2 | 0.5000 | 2/8 | 0 | 50% | 0.3472 | 0.0176 |
+
+Both `weights/step_1/STABLE` and `weights/step_2/STABLE` were written, and the
+controller exited with `current_step = checkpoint_step = 2`. Step 2's mismatch
+KL is slightly above the project's 0.015 monitoring threshold, so this is a
+successful operational continuation, not evidence that more steps should be
+launched without checkpoint-static evaluation. All eight step-2 rollouts
+completed without infrastructure errors; the effective pair had rewards 1.0
+and 0.0, both were fenced and format-valid, and no thinking markers were
+present.
+
+The complete step-2 weight checkpoint, both step broadcasts, configs, logs,
+and traces are retained locally under
+`artifacts/training/pod-runs/qwen-4b-20260806-rtx/`. Remote/local SHA-256 hashes
+matched. The large base shards remain unchanged, as expected for LoRA:
+
+- shard 1: `e8c28c8f5cfaddf1ab67d45bb40d09b96b0fe501c69e0a93808c6bcf2c2051ae`;
+- shard 2: `abf4c830ecae80da54454a5caa9e644ae581377ba9f685b9550c87b9a9978168`;
+- step-2 checkpoint adapter: `de7075b2d006354782a1a8594de1c4a9981a7bd2cfde0a89f752511ad414ae75`;
+- step-1 broadcast adapter: `9b9081612114d1624f422706a600c9a528a9fac6b214e17ae047a914d9c5e69c`;
+- step-2 broadcast adapter: `d44dfa4323f761d64eba964c242a0b17e12b45a0b0884183f09e1d0332763741`.
+
+The checkpoint and broadcast adapter files use different key prefixes and
+serialization, but their 256 normalized tensors are value-identical. The
+step-1 and step-2 broadcast hashes differ, independently confirming a changed
+adapter. Prime-rl's pinned orchestrator collected one speculative post-limit
+batch before entering drain mode, then cancelled its remaining two in-flight
+step-3 rollouts. Their environment subprocess emitted an event-loop-closed
+shutdown traceback; those traces were never trained, and no step-3 checkpoint
+exists. Treat this as bounded shutdown overhead, not a step-2 failure.
+
+Before any longer Qwen continuation, serve the static step-2 policy at
+generation concurrency one and run the disjoint held-out gate. Do not use the
+training-batch rewards above as a promotion decision.
+
+### 2026-08-06 bounded A6000 attempt — Sandbox gate failed, no training launched
+
+The user authorized a $12 GPU-compute ceiling. Prime provisioned a RunPod-backed
+6x A6000 48-GB pod at $3.1968/hour because no two-GPU offer remained available;
+the intended Qwen topology exposed only GPU 0 for training and GPU 1 for vLLM.
+The pod was terminated after 37 minutes, for approximately $1.97 of GPU compute.
+No optimizer step, rollout batch, checkpoint, or training output was produced.
+
+The pinned source and prime-rl commit `44539229436a23e624b0f39826014a4e58a703be`
+installed successfully. A temporary per-run Prime config containing only the
+API key was placed on the pod-local root filesystem with 0700/0600 permissions;
+it was verified removed before termination. The retained local step-20 model
+upload was stopped after the first shard and part of the second because the
+pod was ephemeral and the Sandbox gate had failed. The unchanged local
+step-20 checkpoint remains canonical.
+
+Two exact pod-to-Sandbox feedback probes authenticated and loaded a Level 1
+task, but their pinned `gnuoctave/octave:10.2.0` containers never advanced
+beyond `PROVISIONING`. The second probe hit its explicit 360-second process
+bound and its single stuck Sandbox was deleted. This contrasts with the
+successful workstation preflight earlier the same day and isolates the live
+failure to Prime's managed Sandbox provisioning path rather than Qwen, vLLM,
+the GPU provider, credential discovery, or Octave task loading. Training was
+correctly withheld because it could not obtain trusted rewards. Final CLI
+checks reported zero active pods and zero active Sandboxes.
+
+### 2026-08-05 bounded L40S pod attempt — no real chunk launched
+
+The user authorized a $15 ceiling. A 2x L40S 48-GB pod at $1.64/hour was
+provisioned for two hours and then terminated; its estimated GPU compute was
+about $3.28, excluding any separate Sandbox billing. `prime pods list` and
+`prime sandbox list` both reported zero active resources after cleanup. Raw
+pod evidence is retained locally but ignored at
+`artifacts/training/pod-runs/qwen-4b-20260805/`.
+
+The standalone pod smoke passed with the retained step-20 checkpoint plus a
+remote-only processor-metadata overlay: the vLLM health endpoints and two
+concurrent completions succeeded on the one-inference-GPU envelope. The first
+controller smoke then exposed a User-MCP credential boundary: Verifiers strips
+`*_API_KEY` variables for a worker subprocess, so its `OctaveUser` could not
+create a feedback Sandbox. The bounded rerun used a mode-0700, per-run `HOME`
+containing only a mode-0600 `.prime/config.json`; the directory was removed on
+exit. This is an operational workaround, not a credential value in TOML,
+traces, or the repository.
+
+That credentialed smoke made all eight three-attempt rollouts without runtime
+errors, but every completion used Qwen3.5-4B's default open thinking prompt,
+hit the 1,536-token cap, and produced no fenced function. The zero-advantage
+filter correctly shipped no batch and no checkpoint was saved. The controller
+now explicitly renders:
+
+```toml
+[orchestrator.renderer]
+name = "qwen3.5"
+enable_thinking = false
+```
+
+The pin supports this setting end-to-end. A fresh two-rollout smoke confirmed
+that the model now returns fenced Octave functions with `finish_reason =
+"stop"`, rather than truncating its thinking preamble. It could not reach the
+trusted scorer because each feedback Sandbox stayed `PENDING`/`PROVISIONING`
+past the configured 420-second finalization limit. A separate one-CPU,
+two-GB, five-GB-disk probe of the identical
+`ghcr.io/gnu-octave/octave:10.2.0` image remained `PROVISIONING` for ten
+minutes with no container logs. All four stuck feedback Sandboxes and the
+probe were explicitly deleted. The apparent `JSONDecodeError` in those traces
+is the known User-MCP error wrapper, not malformed model output.
+
+No optimizer step or durable controller progress occurred in either smoke:
+their controller state remains `current_step = checkpoint_step = 0`. Do not
+send the two-step chunk until a one-container probe reaches `RUNNING` and can
+execute a harmless Octave command. If the next cold-start time exceeds 420
+seconds, change the bound only from that measured result, retain the single
+probe/cleanup gate, and do not widen the training batch or retry fan-out.
+
+The targeted controller suite passed (34 tests), along with Ruff and a clean
+diff check. The broad local suite currently cannot collect Sandbox-importing
+tests because the workstation has protobuf gencode 6.31.1 with runtime 5.29.6;
+that is an installed-environment mismatch, not a change to this controller.
+Do not repair it blindly during a future paid-run preparation.
+
+### 2026-08-05 continuation preflight
+
+The current-source Qwen Sandbox smoke passed before any GPU pod was
+provisioned. One Level 1 `reduce_along_dim` rollout with
+`Qwen/Qwen3.5-4B` returned a fenced function; the trusted scorer executed it
+in a fresh pinned Octave Sandbox and confirmed all 6/6 hidden cases. The trace
+has no errors, `case_fraction = raw_case_fraction = 1.0`, and the finalization
+stage took 77.5 seconds. The Sandbox list was empty after teardown.
+
+The smoke also exposed and fixed a cold-start boundary: the pinned Octave image
+can take about five minutes to provision, while the SDK default wait is only
+about 115 seconds. Candidate and retry-feedback Sandbox creation now use a
+bounded 180-poll wait, with 420 seconds reserved for finalization. The task no
+longer requests a second task-level container; its null harness and user run in
+their worker subprocesses, while candidate execution alone provisions the
+1-CPU, 2-GB Octave Sandbox. Current evaluation configs and controller-generated
+configs use that subprocess harness.
+
+The local smoke needed a temporary `pip` PATH shim because this workstation
+sandbox prevents Verifiers' helper from bootstrapping `uv` below the local home
+directory. That shim is not part of the environment or remote pod path. The
+ignored smoke trace is at
+`outputs/preflight/qwen-4b-postfix-subprocess-smoke-20260805-r3-run/`.
+
+The remaining prerequisites for GPU provisioning are an explicit total-dollar
+cap and a hardware choice. The historical $20 ceiling below applied to the
+previous run only. At the latest availability check, the previously validated
+two-RTX-6000-Ada offer was gone; a 2x L40S 48-GB Ada-class pod was available at
+$1.64/hour, while 2x A6000 48-GB was a lower-cost $1.08/hour alternative. Both
+differ from the validated hardware, so run the bounded pod-side Qwen/vLLM
+concurrency smoke before the two-step chunk. A $10 total cap remains a
+conservative recommendation for fresh setup, transfer, that smoke, one
+two-step train-only chunk, retrieval, and a small Sandbox/guide reserve. Use
+the controller's separate $3 run guard with the exact rechecked hourly rate.
 
 The requested environment, calibration, initial RL run, staged curriculum
 controller, live level transition, timing visualization, and supporting
@@ -257,9 +441,12 @@ point a retry at evidence that has not already been copied elsewhere.
 
 ### Repository state
 
-At handoff, `git status` reports the repository contents as untracked. No
-commit or push was requested or created. Establish a baseline commit before
-the next experiment so source, configs, and evidence can be tied to a revision.
+The historical handoff's untracked-worktree note is stale. This continuation
+started clean on `main` at `ab0fffa`. The commit containing this handoff
+versions the Sandbox timeout/runtime plumbing, generated-config behavior,
+tests, and documentation together. Large checkpoints, traces, and pod evidence
+remain local and ignored; the SHA-256 relationships above are their continuity
+record. No push is implied by the local commit.
 
 ### Publication remains a user choice
 
@@ -269,47 +456,67 @@ Public versus private visibility must be chosen explicitly before
 
 ## Recommended next steps
 
+### 0. Require a new authorization before any paid continuation
+
+The 2026-08-06 $12 authorization is closed. It covered the bounded A6000 gate
+attempt and the successful RTX 6000 Ada continuation, for an estimated $5.34
+combined GPU compute. Do not reuse it for more Qwen steps or for Nemotron. For
+any new paid run, obtain a new total-dollar ceiling, recheck the concrete
+offer/rate, preserve a retrieval reserve, and pass a separate controller guard.
+
 ### 1. Preserve and version the current result
 
-Create a repository baseline after reviewing secrets and large-artifact
-policy. At minimum, commit source, configs, tests, summaries, plots, and docs.
-Decide separately whether the 8.7 GB original model belongs in Git LFS,
-external object storage, or a manifest-only artifact registry.
+Keep source, configs, tests, summaries, plots, and docs versioned together.
+Continue excluding raw traces, hidden cases, and model weights from ordinary
+Git. Decide separately whether the retained step-20 and step-2 policies belong
+in Git LFS, external object storage, or a manifest-only artifact registry.
 
-### 2. Restore and smoke-test Prime Sandbox access
+### 2. Recheck Sandbox readiness before pod creation
 
-Do this before provisioning GPUs:
+Sandbox service recovered on 2026-08-06 and the successful pod completed its
+exact pod-to-Sandbox scorer twice before training. That proof is historical,
+not a permanent readiness guarantee. Immediately before any future GPU
+provisioning, confirm the account has no unexpected active resources, create
+exactly one pinned Octave probe, wait for `RUNNING`, execute a harmless
+`octave --version`, and delete it. Do not provision GPUs if that check cannot
+complete within the measured, explicitly budgeted window.
 
-```bash
-prime config view
-prime sandbox create python:3.11-slim --timeout-minutes 10
-```
-
-Run a trivial command in the sandbox, then terminate it. Also confirm:
+Then confirm the selected hardware is still available:
 
 ```bash
 prime pods list --output json --plain
 ```
 
-The expected starting state is zero active pods.
+The expected starting state is zero active pods and zero active Sandboxes.
 
-### 3. Start a fresh resumable trajectory from the retained step-20 model
+### 3. Statically evaluate the retrieved step-2 policy
 
-Do not reuse the historical step-15 controller state with a different policy.
-Initialize a new state tied to:
+Before another optimizer step, merge or otherwise serve the exact retrieved
+base-plus-adapter policy at:
 
 ```text
-artifacts/training/octave-qwen-4b-20step/weights/step_20/
+artifacts/training/pod-runs/qwen-4b-20260806-rtx/weights/step_2/
 ```
 
-Use train-only chunks, the 1,536-token envelope, and the stable concurrency
-settings. Because a throttled optimizer step took approximately 15 minutes,
-prefer two-step chunks initially so a budget interruption cannot erase five
-steps of resumable progress.
+Serve it statically at generation concurrency one, evaluate at least 24
+disjoint Level 1 tasks, and record the exact base/adapter/config hashes with the
+trace. The training-batch reward is not a promotion result. If mismatch KL or
+held-out capability regresses, stop and diagnose rather than extending the
+trajectory.
 
-### 4. Re-establish the Level 1 gate on the new trajectory
+### 4. Decide whether to initialize a new continuation trajectory
 
-After each sparse checkpoint:
+The locally retained `weights/step_2` policy is complete for static serving,
+but the much larger distributed trainer/optimizer checkpoint was not copied
+from the ephemeral pod. Any later training continuation therefore needs an
+explicit optimizer-reset boundary: statically merge the verified step-2
+adapter into its exact base, initialize a new controller state tied to that
+merged policy, and document the reset. Do not reuse the historical step-15
+state or silently label the result as optimizer-continuous.
+
+If continuation is authorized, use train-only two-step chunks, the
+1,536-token envelope, and the proven batch/group/inflight settings. After each
+sparse checkpoint:
 
 1. merge the adapter into its exact retained base;
 2. copy the merged checkpoint locally;
@@ -331,6 +538,8 @@ until Level 2 has two confidence-bounded passes above its current threshold.
 
 - Save or export a resumable checkpoint every two optimizer steps at the
   reduced-concurrency setting.
+- Reserve external or local capacity for the full trainer checkpoint whenever
+  optimizer continuity is required; a weights-only checkpoint is not enough.
 - Add an artifact manifest containing model/base relationships and SHA-256
   hashes.
 - Make pod cleanup conditional on successful local checksum verification.
@@ -362,12 +571,13 @@ disjoint from training and record its seed, policy hash, and source trace.
 
 ## Verification at handoff
 
-- Repository tests: 37 passed.
+- Repository tests: 60 passed.
 - Focused Ruff checks: passed.
 - Python compilation: passed.
 - Reference validation: 9,000/9,000 hidden cases passed.
 - Retrieved adapter checksum: verified.
 - Active Prime pods: zero.
+- Active Prime Sandboxes: zero.
 
 If results in this handoff conflict with an older narrative, prefer
 `artifacts/curriculum/live-2026-07-30/experiment-summary.json` for measured

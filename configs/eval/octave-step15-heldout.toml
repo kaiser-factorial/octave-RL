@@ -29,7 +29,7 @@ guide_model = "Qwen/Qwen3.5-35B-A3B"
 id = "null"
 
 [harness.runtime]
-type = "prime"
+type = "subprocess"
 
 [client]
 type = "train"
@@ -46,7 +46,7 @@ max_tokens = 1536
 
 [timeout]
 rollout = 700
-finalize = 120
+finalize = 420
 scoring = 60
 
 [retries.rollout]

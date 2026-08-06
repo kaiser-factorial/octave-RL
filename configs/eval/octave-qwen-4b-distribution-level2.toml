@@ -21,11 +21,11 @@ guide_enabled = false
 id = "null"
 
 [harness.runtime]
-type = "prime"
+type = "subprocess"
 
 [timeout]
 rollout = 300.0
-finalize = 120.0
+finalize = 420.0
 scoring = 60.0
 
 [sampling]

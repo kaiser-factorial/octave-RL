@@ -8,7 +8,16 @@ import re
 import secrets
 from typing import Any
 
-OCTAVE_IMAGE = "ghcr.io/gnu-octave/octave:10.2.0"
+# Prime's registry preflight currently rejects the fully qualified GHCR mirror
+# even though it serves the same linux/amd64 manifest as Docker Hub.  The
+# unqualified reference selects Prime's working Docker Hub resolver path.
+OCTAVE_IMAGE = "gnuoctave/octave:10.2.0"
+# The Sandbox SDK's default of 60 polls is only about 115 seconds. The pinned
+# Octave image has taken roughly five minutes to provision on a cold/queued
+# service, so keep an explicit, still-bounded window below the 15-minute
+# sandbox lifetime.
+SANDBOX_CREATION_MAX_ATTEMPTS = 180
+SANDBOX_FINALIZE_TIMEOUT_SECONDS = 420
 # The marker includes a fresh per-execution token.  It is distinct from
 # ordinary program output and unavailable while the model generates its answer.
 RESULT_MARKER_PREFIX = "__OCTAVE_HARNESS_RESULT__"

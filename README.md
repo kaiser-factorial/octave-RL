@@ -154,12 +154,19 @@ uv run rl @ /path/to/octave-RL/configs/prime-rl/octave-qwen-4b-20step.toml --dry
 uv run rl @ /path/to/octave-RL/configs/prime-rl/octave-qwen-4b-20step.toml
 ```
 
-Before the real launch, replace `/path/to/octave-RL`, confirm the resolved
-model and output paths, and inject credentials into the process environment or
-a secret manager. Never put API keys in TOML files, shell history, traces, or
-the repository.
+Before the real launch, replace `/path/to/octave-RL` and confirm the resolved
+model and output paths. The worker-subprocess User MCP runtime intentionally
+strips `*_API_KEY` variables, so a remote Sandbox-backed run needs an approved
+per-run secret mount/config path that the user subprocess can read. The
+2026-08-05 pod smoke used a mode-0600 `.prime/config.json` inside an isolated
+mode-0700 temporary `HOME`, then removed that directory on exit. Never put a
+credential value in TOML files, shell history, traces, or the repository.
 
-The checked-in configuration uses:
+The checked-in 20-step TOML is historical evidence, not the continuation
+command. For a fresh run, render the train-only controller configuration from
+the retained step-20 base; it uses a worker-subprocess null harness and creates
+only the explicit candidate Octave Sandboxes. The historical configuration
+uses:
 
 - `Qwen/Qwen3.5-4B` with LoRA rank 16 and learning rate `1e-5`;
 - one trainer GPU plus one inference GPU;
@@ -208,6 +215,12 @@ statically merges the LoRA adapter, evaluates the merged checkpoint on disjoint
 held-out tasks, and then ingests those traces into the controller. This avoids
 the shared inference concurrency failure observed during integrated evaluation.
 Promotion depends only on held-out results, never training-batch reward.
+
+For `Qwen/Qwen3.5-4B`, the generated renderer configuration explicitly sets
+`enable_thinking = false`. The model otherwise opens a thinking block by
+default, which consumed the fixed completion budget during a pod smoke before
+it reached the required fenced Octave function. This is a renderer-only
+generation setting; it does not alter tasks, hidden scoring, or rewards.
 
 The reward protocol was hardened after the historical runs: it now rewards only
 case-level correctness, so a correct first attempt is exactly `1.0`. Candidate

@@ -13,6 +13,8 @@ from generators import build_tasks
 from harness import (
     CANDIDATE_RESULT_MARKER_PREFIX,
     RESULT_MARKER_PREFIX,
+    SANDBOX_CREATION_MAX_ATTEMPTS,
+    SANDBOX_FINALIZE_TIMEOUT_SECONDS,
     build_candidate_runner,
     build_harness,
     candidate_result_marker,
@@ -27,7 +29,9 @@ from harness import (
 from octave_rl import (
     attempt_multiplier,
     candidate_record_matches,
+    execute_candidate_in_new_sandbox,
     execute_candidate_in_sandbox,
+    execute_feedback_in_new_sandbox,
 )
 
 
@@ -194,10 +198,117 @@ def test_final_scoring_compares_candidate_values_outside_the_sandbox(monkeypatch
     assert result["structured_result"] == 1.0
 
 
+def test_candidate_provisioning_uses_the_bounded_long_wait(monkeypatch) -> None:
+    class Client:
+        def __init__(self) -> None:
+            self.request = None
+            self.wait_args = None
+            self.deleted = []
+            self.closed = False
+
+        async def create(self, request):
+            self.request = request
+            return SimpleNamespace(id="sandbox-id")
+
+        async def wait_for_creation(self, *args, **kwargs) -> None:
+            self.wait_args = (args, kwargs)
+
+        async def execute_command(self, *_args, **_kwargs) -> None:
+            return None
+
+        async def delete(self, sandbox_id) -> None:
+            self.deleted.append(sandbox_id)
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    client = Client()
+
+    async def fake_execute(*_args, **_kwargs):
+        return {"fraction": 1.0}
+
+    monkeypatch.setattr(octave_environment, "AsyncSandboxClient", lambda: client)
+    monkeypatch.setattr(octave_environment, "execute_candidate_in_sandbox", fake_execute)
+    result = asyncio.run(
+        execute_candidate_in_new_sandbox(
+            SimpleNamespace(idx=7),
+            "function out=f(); out=0; end",
+        )
+    )
+
+    assert result == {"fraction": 1.0}
+    assert client.request.docker_image == "gnuoctave/octave:10.2.0"
+    assert client.request.memory_gb == 2
+    assert client.wait_args == (("sandbox-id",), {"max_attempts": SANDBOX_CREATION_MAX_ATTEMPTS})
+    assert client.deleted == ["sandbox-id"]
+    assert client.closed is True
+
+
+def test_feedback_provisioning_uses_the_bounded_long_wait_and_deletes(monkeypatch) -> None:
+    class Client:
+        def __init__(self) -> None:
+            self.request = None
+            self.wait_args = None
+            self.deleted = []
+            self.closed = False
+
+        async def create(self, request):
+            self.request = request
+            return SimpleNamespace(id="feedback-sandbox-id")
+
+        async def wait_for_creation(self, *args, **kwargs) -> None:
+            self.wait_args = (args, kwargs)
+
+        async def execute_command(self, *_args, **_kwargs) -> None:
+            return None
+
+        async def delete(self, sandbox_id) -> None:
+            self.deleted.append(sandbox_id)
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    client = Client()
+
+    async def fake_execute(*_args, **_kwargs):
+        return {"fraction": 0.5}
+
+    monkeypatch.setattr(octave_environment, "AsyncSandboxClient", lambda: client)
+    monkeypatch.setattr(octave_environment, "execute_candidate_in_sandbox", fake_execute)
+    result = asyncio.run(
+        execute_feedback_in_new_sandbox(
+            SimpleNamespace(idx=8),
+            "function out=f(); out=0; end",
+        )
+    )
+
+    assert result == {"fraction": 0.5}
+    assert client.request.docker_image == "gnuoctave/octave:10.2.0"
+    assert client.request.labels == ["octave-rl-feedback"]
+    assert client.request.memory_gb == 2
+    assert client.wait_args == (
+        ("feedback-sandbox-id",),
+        {"max_attempts": SANDBOX_CREATION_MAX_ATTEMPTS},
+    )
+    assert client.deleted == ["feedback-sandbox-id"]
+    assert client.closed is True
+
+
+def test_task_default_finalize_timeout_covers_sandbox_provisioning() -> None:
+    task = octave_environment.load_environment(num_tasks=1).load()[0]
+    assert task.data.timeout.finalize == SANDBOX_FINALIZE_TIMEOUT_SECONDS
+
+
 def test_task_does_not_request_a_verifiers_container() -> None:
     # Candidate execution provisions the narrowly scoped Octave sandbox itself.
     # A second runtime container would add cost without adding a trust boundary.
+    task = octave_environment.load_environment(num_tasks=1).load()[0]
     assert octave_environment.OctaveTask.NEEDS_CONTAINER is False
+    assert task.data.image is None
+    assert task.data.workdir is None
+    assert task.data.resources.cpu is None
+    assert task.data.resources.memory is None
+    assert task.data.resources.disk is None
 
 
 def test_result_token_is_fresh() -> None:

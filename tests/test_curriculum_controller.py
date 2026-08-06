@@ -151,6 +151,7 @@ def test_render_uses_stage_ratios_and_stage_relevant_evals(tmp_path):
     assert "max_completion_tokens = 1536" in text
     assert "seq_len = 4096" in text
     assert "max_model_len = 4096" in text
+    assert "enable_thinking = false" in text
     assert "clean_output_dir = false" in text
     parsed = tomllib.loads(text)
     assert parsed["trainer"]["optim"]["lr"] == 5e-6
@@ -301,6 +302,12 @@ def test_render_defaults_to_bounded_train_only_configuration(tmp_path):
     assert parsed["orchestrator"]["batch_size"] == 8
     assert parsed["orchestrator"]["group_size"] == 2
     assert parsed["orchestrator"]["max_inflight_rollouts"] == 2
+    assert parsed["orchestrator"]["renderer"]["enable_thinking"] is False
+    assert parsed["orchestrator"]["train"]["env"][0]["timeout"]["finalize"] == 420
+    assert (
+        parsed["orchestrator"]["train"]["env"][0]["harness"]["runtime"]["type"]
+        == "subprocess"
+    )
     assert {
         item["pool"]["multiplex"] for item in parsed["orchestrator"]["train"]["env"]
     } == {2}

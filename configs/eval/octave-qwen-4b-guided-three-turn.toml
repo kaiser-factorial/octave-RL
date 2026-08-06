@@ -30,11 +30,11 @@ type = "subprocess"
 id = "null"
 
 [harness.runtime]
-type = "prime"
+type = "subprocess"
 
 [timeout]
-rollout = 500.0
-finalize = 120.0
+rollout = 700.0
+finalize = 420.0
 scoring = 60.0
 
 [sampling]

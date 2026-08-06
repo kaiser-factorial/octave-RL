@@ -61,7 +61,11 @@ gate score enough to justify its latency, the staged configuration uses:
 - 4,096 training sequence length;
 - 6,144 maximum conversation and inference context.
 
-This provides repair headroom while bounding a three-attempt interaction.
+This provides repair headroom while bounding a three-attempt interaction. The
+generated Qwen3.5-4B renderer also sets `enable_thinking = false`: the model's
+default open thinking prompt consumed the entire 1,536-token budget in a pod
+smoke before reaching a fenced Octave function. This is a generation-format
+fix, not a reward or task change.
 
 ## Commands
 
@@ -201,6 +205,11 @@ directory. Pass `--integrated-eval` only on a runtime that has separately
 demonstrated safe shared inference concurrency. `--continue-train-only` is an
 explicit expert override; it does not permit curriculum transitions until
 static traces are later ingested.
+
+Generated environments use a worker-subprocess null harness. Candidate code is
+still executed only in its separately provisioned pinned Octave Sandbox, so the
+configuration avoids a redundant outer container while retaining the existing
+host-side scoring boundary.
 
 The safe defaults preserve an eight-rollout optimizer batch while using
 two-rollout GRPO groups and admitting only two requests at once. To override

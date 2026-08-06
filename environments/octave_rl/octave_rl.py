@@ -14,6 +14,8 @@ from generators import build_tasks
 from harness import (
     CANDIDATE_RESULT_MARKER_PREFIX,
     OCTAVE_IMAGE,
+    SANDBOX_CREATION_MAX_ATTEMPTS,
+    SANDBOX_FINALIZE_TIMEOUT_SECONDS,
     build_candidate_runner,
     extract_code,
     format_ok,
@@ -168,31 +170,62 @@ async def execute_candidate_in_sandbox(
     }
 
 
-async def execute_candidate_in_new_sandbox(
+async def _execute_in_new_sandbox(
     task: OctaveData,
     source: str,
+    *,
+    purpose: str,
 ) -> dict[str, Any]:
     """Provision and always tear down one isolated candidate sandbox."""
     client = AsyncSandboxClient()
     sandbox_id: str | None = None
     try:
         sandbox = await client.create(CreateSandboxRequest(
-            name=f"octave-candidate-{task.idx}",
+            name=f"octave-{purpose}-{task.idx}",
             docker_image=OCTAVE_IMAGE,
             start_command="tail -f /dev/null",
             cpu_cores=1,
             memory_gb=2,
             disk_size_gb=5,
             timeout_minutes=15,
-            labels=["octave-rl-candidate"],
+            labels=[f"octave-rl-{purpose}"],
         ))
         sandbox_id = sandbox.id
-        await client.wait_for_creation(sandbox_id)
+        await client.wait_for_creation(
+            sandbox_id,
+            max_attempts=SANDBOX_CREATION_MAX_ATTEMPTS,
+        )
         await client.execute_command(sandbox_id, "mkdir -p /sandbox-workspace/task")
         return await execute_candidate_in_sandbox(client, sandbox_id, task, source)
     finally:
-        if sandbox_id is not None:
-            await client.delete(sandbox_id)
+        try:
+            if sandbox_id is not None:
+                await client.delete(sandbox_id)
+        finally:
+            await client.aclose()
+
+
+async def execute_candidate_in_new_sandbox(
+    task: OctaveData,
+    source: str,
+) -> dict[str, Any]:
+    """Execute final scoring in one short-lived candidate sandbox."""
+    return await _execute_in_new_sandbox(task, source, purpose="candidate")
+
+
+async def execute_feedback_in_new_sandbox(
+    task: OctaveData,
+    source: str,
+) -> dict[str, Any]:
+    """Execute retry feedback in one short-lived sandbox.
+
+    User MCP subprocesses are terminated as process groups after the final model
+    turn, so their async exit callbacks are not a reliable remote-resource
+    teardown boundary.  Deleting before returning the feedback prevents the
+    last reusable Sandbox from being orphaned when the framework reaches its
+    turn cap.
+    """
+    return await _execute_in_new_sandbox(task, source, purpose="feedback")
 
 
 class OctaveState(vf.State):
@@ -211,8 +244,6 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
     def __init__(self, config: OctaveUserConfig):
         super().__init__(config)
         self.task: OctaveData | None = None
-        self.client: AsyncSandboxClient | None = None
-        self.sandbox_id: str | None = None
 
     def _prime_api_key(self) -> str:
         if key := os.getenv("PRIME_API_KEY"):
@@ -270,30 +301,6 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
     async def setup_task(self, task: OctaveData) -> None:
         self.task = task
 
-    async def _ensure_feedback_sandbox(self) -> None:
-        """Start the feedback runner only after a retry actually needs it."""
-        if self.client is not None and self.sandbox_id is not None:
-            return
-        if self.task is None:
-            raise RuntimeError("Octave task data was not provided")
-        self.client = AsyncSandboxClient()
-        sandbox = await self.client.create(CreateSandboxRequest(
-            name=f"octave-feedback-{self.task.idx}",
-            docker_image=OCTAVE_IMAGE,
-            start_command="tail -f /dev/null",
-            cpu_cores=1,
-            memory_gb=2,
-            disk_size_gb=5,
-            timeout_minutes=15,
-            labels=["octave-rl-feedback"],
-        ))
-        self.sandbox_id = sandbox.id
-        self._exit_stack.push_async_callback(self.client.delete, self.sandbox_id)
-        await self.client.wait_for_creation(self.sandbox_id)
-        await self.client.execute_command(
-            self.sandbox_id, "mkdir -p /sandbox-workspace/task"
-        )
-
     async def respond(self, message: str) -> vf.Messages:
         if self.task is None:
             raise RuntimeError("Octave task data was not provided")
@@ -313,11 +320,7 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 "feedback": "Expected one fenced or bare GNU Octave function.",
             }
         else:
-            await self._ensure_feedback_sandbox()
-            assert self.client is not None and self.sandbox_id is not None
-            result = await execute_candidate_in_sandbox(
-                self.client,
-                self.sandbox_id,
+            result = await execute_feedback_in_new_sandbox(
                 self.task,
                 code,
             )
@@ -435,10 +438,11 @@ class OctaveTaskset(vf.Taskset[OctaveTask, OctaveConfig]):
                 name=row["task"],
                 prompt=row["prompt"][0]["content"],
                 system_prompt=SYSTEM_PROMPT,
-                image=OCTAVE_IMAGE,
-                workdir="/sandbox-workspace/task",
-                resources=vf.TaskResources(cpu=1, memory=2, disk=5),
-                timeout=vf.TaskTimeout(harness=180, finalize=90, scoring=30),
+                timeout=vf.TaskTimeout(
+                    harness=180,
+                    finalize=SANDBOX_FINALIZE_TIMEOUT_SECONDS,
+                    scoring=30,
+                ),
                 reference=row["_reference"],
                 **info,
             ), self.config.task))

@@ -593,10 +593,10 @@ def _environment_block(
 [[orchestrator.{"train" if train else "eval"}.env]]
 name = "{name}"
 {ratio_line}{group_line}taskset = {{ id = "octave-rl", level = {level}, num_tasks = {500 if train else 100}, seed = {seed}, task = {{ second_attempt_multiplier = 0.85, guided_attempt_multiplier = 0.60, user = {{ colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B" }} }} }}
-harness = {{ id = "null", runtime = {{ type = "prime" }} }}
+harness = {{ id = "null", runtime = {{ type = "subprocess" }} }}
 max_turns = 3
 max_total_tokens = 6144
-timeout = {{ rollout = 700, finalize = 120, scoring = 60 }}
+timeout = {{ rollout = 700, finalize = 420, scoring = 60 }}
 pool = {{ type = "elastic", max_workers = 1, multiplex = {train_group_size if train else 1} }}
 """.strip()
 
@@ -714,6 +714,9 @@ collect_inference_metrics = false
 
 [orchestrator.renderer]
 name = "qwen3.5"
+# Qwen3.5-4B defaults to an open thinking block. Octave tasks require a
+# compact fenced function, so avoid spending the completion budget on prose.
+enable_thinking = false
 
 [orchestrator.train.sampling]
 temperature = 1.0

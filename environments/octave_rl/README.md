@@ -61,7 +61,7 @@ in traces or package configuration.
 
 ```bash
 uv run validate octave-rl --taskset.level 1 --taskset.num-tasks 10 \
-  --taskset.seed 42 --runtime.type prime --only-gold true
+  --taskset.seed 42 --runtime.type subprocess --only-gold true
 
 uv run eval @ configs/eval/octave-qwen-4b-two-turn.toml
 uv run eval @ configs/eval/octave-qwen-4b-guided-three-turn.toml
@@ -70,6 +70,12 @@ uv run python scripts/validate_reference_pool.py
 
 The configs put `max_turns` at the environment root. It is not an inference
 sampling argument.
+
+The task deliberately leaves `TaskData.image`, workdir, and container
+resources unset. The outer null harness and user simulator run in their worker
+subprocesses; only candidate execution creates the explicit pinned Octave
+Sandbox. This avoids a duplicate container without weakening the host-side
+scoring boundary.
 
 ## Sandbox behavior verified
 
