@@ -1,6 +1,6 @@
 # Octave RL handoff
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 This is the shortest trustworthy orientation for continuing the Octave RL
 work. Read `README.md` for the repository map, `REPORT.md` for the full
@@ -8,6 +8,58 @@ experiment narrative, and `CURRICULUM.md` for controller behavior and command
 details.
 
 ## Current status
+
+### 2026-08-07 Qwen continuation — blocked before GPU provisioning; Prime report submitted
+
+The user renewed a **$12 ceiling for this Qwen continuation**. No GPU pod,
+training process, optimizer step, rollout batch, checkpoint, or Qwen inference
+was launched against that authorization. The run remains stopped at the
+trusted-runtime gate: Prime's managed CPU Sandbox service did not start any of
+four bounded probes, so the environment could not obtain host-controlled
+candidate rewards safely.
+
+All four probes used 1 CPU, 2 GB RAM, a 5 GB disk, a 15-minute Sandbox timeout,
+and an inert `tail -f /dev/null` command. Each was deleted after its bounded
+observation window:
+
+| Sandbox | Image | Region | Observed result |
+| --- | --- | --- | --- |
+| `rme0cnh6viby5wcqsu1pty62` | `gnuoctave/octave:10.2.0` | `us` | job assigned, never reached `RUNNING` |
+| `opuntziqk977xunkj50a3vib` | `gnuoctave/octave:10.2.0` | `us` | remained `PodInitializing` |
+| `ui52x9djxfrqcjjx76ba4l89` | `gnuoctave/octave:10.2.0` | `us-central` | job assigned, no container logs |
+| `megk2ynqgnr4sr9i0g4dwfl1` | `python:3.11-slim` control | `us-central` | job assigned, no container logs |
+
+The plain-Python control reproduced the failure, which rules out the Octave
+image and repository code as the immediate cause. All four records returned
+null error fields. The second probe supplied two scheduler-audit identifiers:
+`5db0dcfd-9ace-430d-8e1c-238d0d49cb01` and
+`79a88d0f-1125-4979-8a77-d3ce90c5ff48`.
+
+A detailed bug report containing the four Sandbox IDs, UTC timelines, images,
+regions, scheduler observations, and audit IDs was accepted through Prime's
+feedback API (`Feedback submitted`). Prime's public status page reported the
+service operational, but the account-level probes above are the controlling
+evidence. Final inventories showed zero active Sandboxes and zero active GPU
+pods.
+
+The previously approved isolated `.prime/config.json` credential workaround
+is still authorized for the future GPU worker-subprocess boundary. It was not
+used here and cannot affect this failure: all four probes stalled before their
+containers started. Do not place credentials in the repository, TOML files,
+traces, or shell history.
+
+Separate, unrelated Prime Inference activity was present on the account. It is
+not part of this Qwen training run or its $12 ledger. Because both draw from
+the same Prime wallet, recheck the wallet and active billing resources
+immediately before any Qwen spend; an idle local agent daemon is not itself
+proof of continuing token charges.
+
+**Restart gate:** do not provision a GPU. Wait for Prime recovery or a support
+response, then create exactly one pinned-Octave Sandbox, require it to reach
+`RUNNING`, execute `octave --version`, run one exact 6/6 hidden-case scorer
+probe, delete the Sandbox, and verify zero active resources. Only after that
+gate passes should the retained step-2 policy be statically evaluated or a
+new bounded training trajectory be considered.
 
 ### 2026-08-06 two-step RTX 6000 Ada continuation — completed and retrieved
 
@@ -441,12 +493,13 @@ point a retry at evidence that has not already been copied elsewhere.
 
 ### Repository state
 
-The historical handoff's untracked-worktree note is stale. This continuation
-started clean on `main` at `ab0fffa`. The commit containing this handoff
-versions the Sandbox timeout/runtime plumbing, generated-config behavior,
-tests, and documentation together. Large checkpoints, traces, and pod evidence
-remain local and ignored; the SHA-256 relationships above are their continuity
-record. No push is implied by the local commit.
+The historical handoff's untracked-worktree note is stale. The 2026-08-07
+handoff refresh started clean on `main` at `ef35f9f`, matching `origin/main`.
+Large checkpoints, traces, credentials, and pod evidence remain local and
+ignored; the SHA-256 relationships above are their continuity record. The
+current handoff update is intended to be versioned and verified on remote
+`main` together with the already-published Sandbox timeout/runtime plumbing,
+generated-config behavior, tests, and documentation.
 
 ### Publication remains a user choice
 
@@ -456,13 +509,16 @@ Public versus private visibility must be chosen explicitly before
 
 ## Recommended next steps
 
-### 0. Require a new authorization before any paid continuation
+### 0. Preserve the renewed $12 authorization boundary
 
-The 2026-08-06 $12 authorization is closed. It covered the bounded A6000 gate
-attempt and the successful RTX 6000 Ada continuation, for an estimated $5.34
-combined GPU compute. Do not reuse it for more Qwen steps or for Nemotron. For
-any new paid run, obtain a new total-dollar ceiling, recheck the concrete
-offer/rate, preserve a retrieval reserve, and pass a separate controller guard.
+The earlier 2026-08-06 $12 authorization is closed; it covered the bounded
+A6000 gate attempt and successful RTX 6000 Ada continuation, for an estimated
+$5.34 combined GPU compute. The user subsequently renewed a separate **$12
+ceiling for the next Qwen continuation**. No Qwen GPU spend has been made under
+that renewed ceiling. Before using it, recheck the wallet, all active billing
+resources, the concrete GPU offer/rate, and the Sandbox gate above. Keep a
+retrieval reserve and pass a separate controller deadline/cost guard. Do not
+apply this authorization to Nemotron or unrelated Prime Inference activity.
 
 ### 1. Preserve and version the current result
 
@@ -578,6 +634,9 @@ disjoint from training and record its seed, policy hash, and source trace.
 - Retrieved adapter checksum: verified.
 - Active Prime pods: zero.
 - Active Prime Sandboxes: zero.
+- Four fresh 2026-08-07 Sandbox probes: none reached `RUNNING`; all deleted.
+- Prime Sandbox bug report: accepted (`Feedback submitted`).
+- Qwen training under the renewed $12 ceiling: not launched.
 
 If results in this handoff conflict with an older narrative, prefer
 `artifacts/curriculum/live-2026-07-30/experiment-summary.json` for measured
