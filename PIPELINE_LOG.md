@@ -30,6 +30,54 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — Efficiency pressure belongs in the advantage, not in the reward
+
+**Observation.** The attempt multipliers (1.00 / 0.85 / 0.60) discount the
+reward *inside the environment*, so a three-attempt solve is reported as 0.60.
+That contaminates the capability signal — and the project already works around
+it: the handoff designates `raw_case_fraction` "the only cross-run/curriculum
+comparison metric" precisely because `case_fraction` has efficiency baked in.
+Two metrics exist to undo one design choice.
+
+**prime-rl has a native mechanism that does this properly.**
+`[orchestrator.algo.length_penalty]` subtracts
+`weight * pass_rate * (rollout_metric / group max metric)` from each reward
+*before* the GRPO baseline subtraction, with separate weights for output
+tokens, input tokens and turns. It was unset, so all terms were off.
+
+**They are not interchangeable, and the differences matter:**
+
+| | attempt multiplier | length_penalty |
+| --- | --- | --- |
+| applied in | environment reward | orchestrator advantage |
+| scale | absolute (0.85, 0.60) | relative to the group's max |
+| reported reward / evals | discounted | left raw |
+| group where nothing worked | still discounts | no penalty (scales with pass rate) |
+| group where all rollouts used equal turns | still discounts | cancels in the baseline |
+
+The last row is the real constraint: the penalty only creates pressure where
+turns actually vary *within* a group. In the smoke they did (mean turns
+1.5–2.2), so it would bite.
+
+**Added as a variant config, not a default.**
+`configs/prime-rl/octave-qwen-4b-length-penalty.toml` is identical to the smoke
+config except that both multipliers are 1.0 and the turns term is enabled at
+0.1. With unit multipliers `case_fraction` and `raw_case_fraction` coincide at
+every attempt count, which is the point — the reward becomes a clean capability
+measure and the efficiency preference moves to where it cannot distort an eval.
+No code change was needed: the multipliers were already configurable.
+
+**Inert for WS3 as written.** WS3's arms are single-turn, so every rollout has
+`turns = 1`, the turns term is uniform, and it cancels. The *output-token* term
+would still apply there and is left at 0 so this config changes exactly one
+thing — worth revisiting given that 19.6% of zero-score rollouts are truncation,
+where shorter answers would genuinely help.
+
+**Residual risk.** Untested on a pod. The arithmetic and config binding are
+verified locally, but no run has yet confirmed that a 0.1 turns weight produces
+useful pressure rather than noise at `group_size = 2`. Do not enable it and a
+group-size change in the same run, or neither effect will be attributable.
+
 ## 2026-08-08 — Retry feedback can now name a transposed result (opt-in)
 
 **Change, not a defect.** A transposed answer was undiagnosable from what the

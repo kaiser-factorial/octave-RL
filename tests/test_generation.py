@@ -453,3 +453,21 @@ def test_transpose_is_detected_but_not_rewarded() -> None:
     )
     assert record["fraction"] == 1.0
     assert record["transposed_fraction"] == 0.0, "a correct answer is not a transpose"
+
+
+def test_unit_multipliers_make_reward_equal_raw_correctness() -> None:
+    # The length-penalty variant moves efficiency pressure out of the reward and
+    # into the advantage. With both multipliers at 1.0, case_fraction and
+    # raw_case_fraction coincide at every attempt count, so the reward stops
+    # double-counting "needed retries" as reduced capability.
+    for attempts in (1, 2, 3, 4):
+        assert attempt_multiplier(
+            attempts=attempts,
+            second_attempt_multiplier=1.0,
+            guided_attempt_multiplier=1.0,
+        ) == 1.0
+
+    # The default configuration still discounts, so existing runs are unchanged.
+    assert attempt_multiplier(
+        attempts=3, second_attempt_multiplier=0.85, guided_attempt_multiplier=0.60
+    ) == 0.60

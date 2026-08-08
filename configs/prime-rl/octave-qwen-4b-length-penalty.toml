@@ -1,0 +1,118 @@
+# Variant: efficiency pressure via prime-rl's native length penalty instead of
+# the environment's attempt multipliers.
+#
+# WHY. The multipliers (1.00 / 0.85 / 0.60) discount the reward *inside the
+# environment*, so a three-attempt solve is reported as 0.60. That contaminates
+# the capability signal -- which is precisely why this project already keeps
+# `raw_case_fraction` as "the only cross-run/curriculum comparison metric".
+# Setting both multipliers to 1.0 makes `case_fraction` == `raw_case_fraction`
+# and removes the need for two metrics, while `[orchestrator.algo.length_penalty]`
+# supplies the efficiency pressure where it belongs: in the advantage, not in
+# the reported reward.
+#
+# HOW THEY DIFFER -- these are not interchangeable:
+#   - The multiplier is ABSOLUTE and lands in the reward, so it also discounts
+#     evaluation numbers. The penalty is GROUP-RELATIVE
+#     (`rollout_turns / group_max_turns`) and touches only the advantage, so
+#     reported rewards and evals stay raw.
+#   - The penalty scales with the group's pass rate, so a group where nothing
+#     worked is not penalised for being long. The multiplier has no such guard.
+#   - If every rollout in a group used the same number of turns, the penalty is
+#     uniform and cancels in the baseline subtraction. The multiplier still
+#     discounts. So the penalty only creates pressure where turns actually vary
+#     within a group -- which they did in the smoke (1.5-2.2 mean turns).
+#
+# NOT USEFUL FOR WS3 AS WRITTEN. WS3's arms are single-turn, so every rollout
+# has turns = 1, the turns term cancels, and this changes nothing. The
+# output-token term would still bite there; it is left at 0 here so this config
+# changes exactly one thing.
+#
+# Compare against octave-qwen-4b-3step-smoke.toml, which is identical except
+# for the multipliers and this block.
+max_steps = 3
+seq_len = 4096
+output_dir = "training_outputs/octave-qwen-4b-length-penalty"
+clean_output_dir = true
+
+[deployment]
+type = "single_node"
+num_train_gpus = 1
+num_infer_gpus = 1
+
+[model]
+name = "Qwen/Qwen3.5-4B"
+
+[model.vlm]
+vision_encoder_attr = "model.visual"
+language_model_attr = "model.language_model"
+
+[orchestrator]
+batch_size = 8
+group_size = 2
+max_inflight_rollouts = 2
+collect_inference_metrics = false
+
+[orchestrator.algo.length_penalty]
+# reward_i -= weight * pass_rate * (metric_i / group max metric), applied
+# before the GRPO baseline subtraction. 0 disables a term.
+num_turns_weight = 0.1
+num_output_tokens_weight = 0.0
+num_input_tokens_weight = 0.0
+
+[orchestrator.renderer]
+name = "qwen3.5"
+enable_thinking = false
+
+[orchestrator.train.sampling]
+# T=1.0 keeps the sampled distribution equal to the one whose log-probs the
+# trainer scores. Do not lower it to make tasks "harder" -- that biases the
+# objective; change the task mix instead.
+temperature = 1.0
+max_completion_tokens = 1536
+
+[[orchestrator.train.env]]
+name = "octave-level1-guided-local-lenpen"
+group_size = 2
+taskset = { id = "octave-rl", level = 1, num_tasks = 500, seed = 314159, task = { octave_runtime = "local", second_attempt_multiplier = 1.0, guided_attempt_multiplier = 1.0, user = { colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B", octave_runtime = "local" } } }
+harness = { id = "null", runtime = { type = "subprocess" } }
+max_turns = 3
+max_total_tokens = 6144
+timeout = { rollout = 900, finalize = 300, scoring = 60 }
+pool = { type = "elastic", max_workers = 1, multiplex = 2 }
+
+[trainer]
+
+[trainer.model]
+impl = "custom"
+optimization_dtype = "bfloat16"
+reduce_dtype = "bfloat16"
+optim_cpu_offload = true
+
+[trainer.model.lora]
+rank = 16
+alpha = 32
+dropout = 0.0
+
+[trainer.optim]
+lr = 1e-5
+
+[trainer.ckpt.weights]
+save_adapter_separately = true
+
+[ckpt]
+# Every step: a three-step smoke must leave a retrievable checkpoint even if
+# it is stopped early, and the adapter round-trip is part of the pass criteria.
+interval = 1
+keep_last = 3
+
+[inference]
+gpu_memory_utilization = 0.85
+
+[inference.model]
+# RTX 6000 Ada (SM89): vLLM's CUDA-graph init and bundled FlashAttention-2 path
+# both fault on Qwen3.5. These two settings are the validated workaround.
+enforce_eager = true
+max_model_len = 6144
+
+[inference.vllm_extra]
+attention_backend = "TRITON_ATTN"
