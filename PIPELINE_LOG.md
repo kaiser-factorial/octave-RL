@@ -30,6 +30,149 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — The independence model understated wasted rollouts by up to 14x
+
+**Symptom.** The G1 pre-read written earlier today recommended a curriculum mix
+and a `group_size` off a table of "fraction of groups carrying zero advantage",
+computed as `p**g + (1-p)**g`. Measured directly at `num_rollouts = 8`, the real
+figures are 0.148 / 0.500 / 0.593 for Nemotron L1 / L2 / L3 at g=8, against a
+predicted 0.008 / 0.036 / 0.290. The L2 error is a factor of **14**.
+
+**Root cause.** The formula treats the 8 rollouts of a task as independent
+Bernoulli draws at the task's pass rate. Almost all of the variance is *between*
+tasks, not within one. The marginal p = 0.34 on L2 is an average over a mixture
+of tasks the model near-reliably solves and tasks it near-reliably fails;
+sampling at T=1.0 varies the wording, not the capability. The successes-per-
+group distribution is U-shaped where binomial predicts a hump:
+
+```
+passes/8    observed   binomial
+       0          11        1.2
+       1..7       17       29.8
+       8           4        0.0
+```
+
+Var(successes) / binomial variance — the dispersion ratio — is 2.0–4.6 for
+Nemotron and 3.0–3.2 for Qwen3.5-4B on the same tasks, so this is a property of
+the **taskset**, not of one model.
+
+**Blast radius.** One recommendation in one advisory document
+(`RL investigation - PART B/g1_baseline_nemotron_20260808.md`, §3), corrected in
+place the same day. Nothing was trained on it. Had it survived to arm sizing it
+would have over-budgeted useful rollouts by roughly 2x at g=8: the L2/L3 50–50
+mix delivers **45.4%** useful rollouts at g=8, not the 81.6% implied.
+
+**Why it survived.** The check that produced it was a closed-form expression, so
+there was nothing to fail. Its one assumption — within-group independence — was
+stated in the doc's caveats *and flagged as erring toward understating waste*,
+and it was still used to pick a number. A caveat that names the direction of an
+error is not a substitute for measuring it, particularly when measuring it costs
+9 cents and 30 minutes with no GPU.
+
+**Fix.** `scripts/group_spread.py` measures the degenerate fraction from a run's
+own groups, reports the independence prediction beside it so the modelling error
+stays visible, and gives exact sub-group figures for smaller `g` by averaging
+over all `C(8,k)` subsets rather than resampling. `scripts/eval_hosted.py` grows
+`--num-rollouts`, pinned to 1 for greedy cells (T=0 is deterministic; a group of
+8 would be 8 copies of one answer).
+
+Deliberately not changed: the reward remains ungrouped and the advantage
+remains un-normalised. This is a measurement defect, not an algorithm one.
+
+**Verification.** 768 rollouts per model, both models, same 32 tasks per level,
+$0.22 combined. Dispersion, observed and predicted degenerate fractions, and
+corrected mix table in `artifacts/group-spread-20260808/RESULTS.md`.
+
+**Residual risk.** Dispersion is measured for a *base* policy. A policy under
+RL should decorrelate somewhat as it learns, so these figures are the pessimistic
+end for later training steps and the realistic end for step 0. Re-measure if a
+run's reward plateaus in a way that looks like starvation.
+
+---
+
+## 2026-08-08 — A hosted eval reproduces the pod, so a 2-cent pre-read is worth trusting
+
+**Symptom.** Not a defect. Recording the control, because every conclusion drawn
+from a hosted run depends on it and it had not been checked.
+
+**The gap.** Every number in this project before today came from a pod-local
+vLLM through the verifiers **train** client, which tokenises client-side with an
+explicit renderer. Every hosted number comes through the **eval** client, which
+relays chat requests and lets the provider apply its own chat template.
+Different rendering, transport and auth. Nothing established that the two agree,
+which meant the cheap hosted numbers were uninterpretable as guidance for a
+pod-based training run — the thing they were being used for.
+
+**Result.** Base Qwen3.5-4B at greedy, hosted via Prime Inference, paired on the
+identical 32 tasks per level against the 2026-08-08 pod run:
+
+| level | pod (train client) | hosted (eval client) | discordant | McNemar p |
+|---|---:|---:|---:|---:|
+| L1 | 0.7031 | 0.6406 | 3 vs 1 | 0.625 |
+| L2 | 0.3750 | 0.2865 | 4 vs 1 | 0.375 |
+| L3 | 0.4062 | 0.4062 | 1 vs 1 | 1.000 |
+
+Indistinguishable at every level, 4–5 discordant tasks out of 32. Mean
+completion tokens track (178/273/444 hosted vs 176/276/409 pod), as do L3
+truncation and format validity (0.156 / 0.84 on both paths). 96 rollouts, about
+1.5 cents, four minutes.
+
+**What it licenses, and what it does not.** It licenses using a hosted pre-read
+to *rank* configurations and to size a band before authorising a pod. It does
+not license publishing a hosted number as a pod number: the control is one
+model, greedy only, and provider serving config is not pinned the way the Octave
+interpreter is. Run it per model rather than assuming it transfers.
+
+**Why this was worth 1.5 cents.** Without it, today's cheapest and most decision-
+relevant findings — the G1 band, the dispersion measurement, the model
+comparison — would all have rested on an unexamined assumption that the eval
+client and the train client see the same model.
+
+**Residual risk.** A provider can change a serving build without notice, so this
+control has a shelf life. Re-run it alongside any hosted measurement that will
+inform a spend, rather than citing this one.
+
+---
+
+## 2026-08-08 — Standard errors were computed per rollout, not per task
+
+**Symptom.** `scripts/summarize_baseline_eval.py` reported ±0.031 / 0.030 / 0.022
+for the three Nemotron g=8 cells. The correct clustered figures are
+**0.056 / 0.064 / 0.031** — roughly 2x larger.
+
+**Root cause.** `statistics.stdev(raw) / sqrt(len(raw))` treats every rollout as
+an independent trial. With `num_rollouts = 8` a cell is 32 tasks observed 8
+times, not 256 independent observations, and the rollouts within a task are
+correlated by a factor of 2.0–4.6 (see the dispersion entry above). The
+independent unit is the task.
+
+**Blast radius.** No published interval. Every prior run used
+`num_rollouts = 1`, where the clustered and naive figures coincide exactly, so
+no historical number is affected. It would have mattered on the first grouped
+run — which is the run that just happened.
+
+**Why it survived.** The summarizer was written for single-rollout baseline
+cells and was correct for every input it had ever seen. The failure mode only
+appears when a new kind of run is passed to an old tool, and nothing about the
+old tool's output announced the assumption. This is the same shape as the
+2026-08-07 reward-flattening defect: a check that measured the right thing on
+the data it was designed for and something adjacent on the data it was given.
+
+**Fix.** The summarizer clusters by task name, reports `tasks` and
+`rollouts_per_task` alongside `rollouts`, and keeps the naive figure as
+`raw_case_fraction_stderr_naive` so the two can be compared rather than one
+silently replacing the other. With one rollout per task the clustered
+computation reduces to the ordinary standard error, verified against the
+single-rollout cells (0.0882 / 0.0853 / 0.0594 before and after).
+
+**Residual risk.** The Wilson lower bound on solve rate is still computed on
+rollout counts and is therefore still over-tight for grouped runs. It is left
+alone deliberately — a clustered Wilson interval is a different estimator and
+introducing one silently would be worse than a documented limitation. Read the
+clustered ±SE, not the Wilson column, on any run with `rollouts_per_task > 1`.
+
+---
+
 ## 2026-08-08 — Thinking-off is a different knob on each client, and the eval client's config is not the train client's
 
 **Symptom.** The first hosted-eval config, written by analogy to

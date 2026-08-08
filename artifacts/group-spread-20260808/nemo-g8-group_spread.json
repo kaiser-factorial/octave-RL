@@ -1,0 +1,47 @@
+{
+  "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-g8-l1": {
+    "p": 0.515,
+    "dispersion": 3.205,
+    "n_groups": 32,
+    "observed": {
+      "2": 0.6389,
+      "4": 0.3513,
+      "8": 0.1481
+    },
+    "independent": {
+      "2": 0.5004,
+      "4": 0.1257,
+      "8": 0.008
+    }
+  },
+  "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-g8-l2": {
+    "p": 0.3398,
+    "dispersion": 4.599,
+    "n_groups": 32,
+    "observed": {
+      "2": 0.7917,
+      "4": 0.6214,
+      "8": 0.5
+    },
+    "independent": {
+      "2": 0.5513,
+      "4": 0.2033,
+      "8": 0.0363
+    }
+  },
+  "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-g8-l3": {
+    "p": 0.1432,
+    "dispersion": 2.015,
+    "n_groups": 32,
+    "observed": {
+      "2": 0.8294,
+      "4": 0.6926,
+      "8": 0.5926
+    },
+    "independent": {
+      "2": 0.7546,
+      "4": 0.5393,
+      "8": 0.2903
+    }
+  }
+}
