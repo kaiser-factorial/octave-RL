@@ -197,6 +197,10 @@ class OctaveUserConfig(vf.UserConfig):
     max_attempts: int = 2
     guide_enabled: bool = False
     guide_model: str = "Qwen/Qwen3.5-35B-A3B"
+    # Name a transposed result explicitly in the retry feedback. Off by default:
+    # it changes what the model is shown, so a run that enables it is not
+    # comparable with one that does not, and WS3's arms are single-turn anyway.
+    orientation_hint_enabled: bool = False
     # NOT `runtime`: vf.UserConfig already defines `runtime: RuntimeConfig` for
     # where the simulator process runs. Shadowing it with a string makes
     # serve_user call .model_dump() on "local" and every rollout dies.
@@ -264,6 +268,35 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
     async def setup_task(self, task: OctaveData) -> None:
         self.task = task
 
+    def _orientation_hint(self, result: dict[str, Any]) -> str:
+        """Name a transposed result, which the raw diagnostic cannot express.
+
+        A transposed answer is the one failure where the model computed
+        everything correctly and only mismatched Octave's orientation
+        convention. Nothing it is currently shown reveals that: the transport it
+        sees carries its *own* shapes, never the expected ones, so the same
+        orientation is typically resubmitted on every remaining attempt and
+        three attempts are spent for no signal.
+
+        This does disclose the expected *shape* -- more than the existing
+        pass/fail count, though still not any expected value. That is why it is
+        opt-in: it is a deliberate trade of a little information for a usable
+        retry, and it must be off for any run being used as a benchmark.
+        """
+        if not self.config.orientation_hint_enabled:
+            return ""
+        if not result.get("transposed"):
+            return ""
+        # Only speak up when transposition explains every failing case;
+        # otherwise something else is wrong too and this would misdirect.
+        if result["transposed"] != result["total"] - result["passed"]:
+            return ""
+        return (
+            "Orientation: your values are correct but transposed -- the "
+            "expected result has the rows and columns the other way round. "
+            "Check the orientation the prompt asks you to preserve.\n"
+        )
+
     async def respond(self, message: str) -> vf.Messages:
         if self.task is None:
             raise RuntimeError("Octave task data was not provided")
@@ -290,6 +323,7 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 purpose="feedback",
             )
         solved = result["passed"] == result["total"]
+        orientation = self._orientation_hint(result)
         if solved or self.state.attempts >= self.config.max_attempts:
             self.state.done = True
         if solved:
@@ -298,6 +332,7 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
             content = (
                 f"Hidden tests passed {result['passed']}/{result['total']} cases. "
                 "Return one corrected replacement function.\n"
+                + orientation
                 + result["feedback"][-1400:]
             )
             if (
@@ -479,6 +514,7 @@ def load_environment(
         max_attempts=max_turns,
         guide_enabled=bool(kwargs.pop("guide_enabled", False)),
         guide_model=str(kwargs.pop("guide_model", "Qwen/Qwen3.5-35B-A3B")),
+        orientation_hint_enabled=bool(kwargs.pop("orientation_hint_enabled", False)),
         octave_runtime=runtime,
     )
     task_config = OctaveTaskConfig(

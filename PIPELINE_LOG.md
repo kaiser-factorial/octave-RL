@@ -30,6 +30,53 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — Retry feedback can now name a transposed result (opt-in)
+
+**Change, not a defect.** A transposed answer was undiagnosable from what the
+model is shown. The retry message carries the pass count and the raw transport,
+and the transport contains the candidate's *own* shapes, never the expected
+ones. So a model that transposes has no way to learn that from the feedback,
+resubmits the same orientation on attempts 2 and 3, and burns three attempts
+producing nothing. `OctaveUser` now names it:
+
+> *Orientation: your values are correct but transposed -- the expected result
+> has the rows and columns the other way round. Check the orientation the
+> prompt asks you to preserve.*
+
+**Off by default** (`orientation_hint_enabled`), for two reasons. It changes
+what the model is shown, so a run with it on is not comparable to one with it
+off; and WS3's arms are single-turn (§3b), where there is no retry for a hint to
+reach. Enabling it is an explicit, config-recorded choice.
+
+**It stays quiet unless transposition explains *every* failing case.** If two of
+six failures are transposes and two are genuinely wrong, saying "you are
+transposed" would send the model after the wrong bug. Tested.
+
+**On the reward, deliberately unchanged.** The idea of paying a small bonus for
+a repaired transpose was considered and dropped. prime-rl's GRPO computes
+`advantages = rewards - rewards.mean()` with **no standard-deviation
+normalisation** (`orchestrator/algo/grpo.py`), so the incentive to get
+orientation right on the first attempt rather than the second is worth
+`±0.075` in advantage against `±0.5` for solving at all -- about **6.7x
+weaker**. The multiplier gradient exists but is a whisper next to the main
+signal, and a partial-credit tier would additionally weaken a requirement the
+prompt states explicitly.
+
+If first-attempt correctness is wanted later, the native lever is
+`GRPOAlgoConfig.length_penalty.num_turns_weight`, which shapes reward by turns
+consumed and is currently unset. That penalises "needed three attempts"
+directly rather than relying on the 1.0-vs-0.85 gap.
+
+**Information disclosed.** The hint reveals the expected *shape* -- more than
+the existing pass/fail count, still not any expected value. Acceptable for a
+training environment, a leak for a benchmark. That is the trade the flag exists
+to make explicit.
+
+**Verification.** A genuinely transposed implementation run through the pinned
+Octave 10.2.0 rootfs yields `transposed_fraction = 1.0`, `execution_fraction =
+1.0`, `fraction = 0.0`, and produces the hint; with the flag off it produces the
+empty string. 38 tests pass.
+
 ## 2026-08-08 — Orientation failures are literally transposes, and the judge over-counted them
 
 **Question.** Is "orientation mismatch" a real, mechanically detectable
