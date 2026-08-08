@@ -1,0 +1,86 @@
+max_turns = 1
+max_total_tokens = 4096
+model = "/home/ubuntu/ws/qwen3.5-4b-base"
+num_tasks = 32
+num_rollouts = 1
+shuffle = false
+max_concurrent = 2
+verbose = false
+dry_run = false
+rich = false
+server = false
+push = false
+output_dir = "/home/ubuntu/ws/baseline-eval/ctlA-thinkon-l1"
+
+[taskset]
+id = "octave-rl"
+level = 1
+num_tasks = 500
+seed = 20260808
+require_vectorized = false
+
+[taskset.task]
+judges = []
+second_attempt_multiplier = 0.85
+guided_attempt_multiplier = 0.6
+octave_runtime = "local"
+
+[taskset.task.user]
+colocated = false
+max_attempts = 1
+guide_enabled = false
+guide_model = "Qwen/Qwen3.5-35B-A3B"
+octave_runtime = "local"
+
+[taskset.task.user.runtime]
+type = "subprocess"
+
+[harness]
+id = "null"
+forward_env = []
+
+[harness.runtime]
+type = "subprocess"
+
+[harness.env]
+
+[timeout]
+rollout = 600.0
+finalize = 300.0
+scoring = 60.0
+
+[retries.rollout]
+max_retries = 0
+include = []
+exclude = []
+
+[interception]
+type = "elastic"
+multiplex = 32
+
+[args]
+
+[extra_env_kwargs]
+
+[pool]
+type = "elastic"
+multiplex = 128
+
+[client]
+base_url = "http://localhost:8000/v1"
+api_key_var = "PRIME_API_KEY"
+type = "train"
+pool_size = 2
+renderer_model_name = "/home/ubuntu/ws/qwen3.5-4b-base"
+
+[client.headers]
+
+[client.renderer]
+name = "qwen3.5"
+add_vision_id = false
+image_cache_max = 256
+
+[sampling]
+temperature = 1.0
+reasoning_effort = "none"
+max_tokens = 1024

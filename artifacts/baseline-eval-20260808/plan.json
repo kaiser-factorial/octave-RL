@@ -1,0 +1,44 @@
+[
+  {
+    "policy": "base",
+    "model": "/home/ubuntu/ws/qwen3.5-4b-base",
+    "level": 1,
+    "inference_config": "/home/ubuntu/ws/baseline-eval/configs/inference-base.toml",
+    "eval_config": "/home/ubuntu/ws/baseline-eval/configs/eval-base-l1.toml"
+  },
+  {
+    "policy": "base",
+    "model": "/home/ubuntu/ws/qwen3.5-4b-base",
+    "level": 2,
+    "inference_config": "/home/ubuntu/ws/baseline-eval/configs/inference-base.toml",
+    "eval_config": "/home/ubuntu/ws/baseline-eval/configs/eval-base-l2.toml"
+  },
+  {
+    "policy": "base",
+    "model": "/home/ubuntu/ws/qwen3.5-4b-base",
+    "level": 3,
+    "inference_config": "/home/ubuntu/ws/baseline-eval/configs/inference-base.toml",
+    "eval_config": "/home/ubuntu/ws/baseline-eval/configs/eval-base-l3.toml"
+  },
+  {
+    "policy": "step20",
+    "model": "/home/ubuntu/ws/step20-merged",
+    "level": 1,
+    "inference_config": "/home/ubuntu/ws/baseline-eval/configs/inference-step20.toml",
+    "eval_config": "/home/ubuntu/ws/baseline-eval/configs/eval-step20-l1.toml"
+  },
+  {
+    "policy": "step20",
+    "model": "/home/ubuntu/ws/step20-merged",
+    "level": 2,
+    "inference_config": "/home/ubuntu/ws/baseline-eval/configs/inference-step20.toml",
+    "eval_config": "/home/ubuntu/ws/baseline-eval/configs/eval-step20-l2.toml"
+  },
+  {
+    "policy": "step20",
+    "model": "/home/ubuntu/ws/step20-merged",
+    "level": 3,
+    "inference_config": "/home/ubuntu/ws/baseline-eval/configs/inference-step20.toml",
+    "eval_config": "/home/ubuntu/ws/baseline-eval/configs/eval-step20-l3.toml"
+  }
+]

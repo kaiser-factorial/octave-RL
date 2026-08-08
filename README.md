@@ -122,15 +122,58 @@ Inference. It receives only the public prompt, candidate source, and first
 diagnostic—not hidden inputs, expected values, or reference code. Disable the
 guide in task configuration if you want a fully self-contained two-turn run.
 
-To validate generated reference programs against the pinned Octave runtime:
+## Choose a candidate runtime
+
+Candidate code runs in one of two places, selected by `runtime`:
+
+| `runtime` | Where candidate code runs | Use for |
+| --- | --- | --- |
+| `"prime"` (default) | one short-lived Prime Sandbox per execution | runs whose numbers you report |
+| `"local"` | a bounded subprocess on the calling host | development, CI, pipeline validation, pod-local training |
+
+Both use the same input-only runner and the same scorer, so hidden expected
+values and pass counters stay outside the interpreter running model output
+either way. They differ in containment and in speed: the full 1,500-task pool
+validates in about three minutes locally, against roughly five minutes of cold
+provisioning *per candidate* through a Sandbox.
+
+The local runtime scores on whatever Octave it is pointed at, so point it at the
+pinned one:
 
 ```bash
+uv run python scripts/fetch_pinned_octave.py --dest /opt/octave-rootfs
+export OCTAVE_RL_OCTAVE_ROOTFS=/opt/octave-rootfs
+```
+
+That pulls `gnuoctave/octave:10.2.0` from the registry and unpacks it — no
+Docker daemon, which matters on Prime pods and CI runners because those are
+containers themselves. With it set, candidates run under `unshare --net` →
+`chroot` → `ulimit` bounds, so they see neither the host filesystem nor a
+network. Without a rootfs the host's own Octave is used. If a network namespace
+cannot be obtained the backend refuses to run unless
+`OCTAVE_RL_ALLOW_UNISOLATED_LOCAL=1` is set, and records then report
+`network_isolated = false`.
+
+## Validate the reference pool
+
+```bash
+# through the reward path, no Prime usage
+uv run python scripts/validate_local_runtime.py --num-tasks 500 --seed 0
+
+# through the in-Octave harness, in Prime Sandboxes (incurs platform usage)
 uv run python scripts/validate_reference_pool.py
 ```
 
-The full default pool previously passed 9,000/9,000 hidden cases: 500 tasks at
-each of three levels, with six cases per task. Live validation creates Prime
-Sandboxes and therefore incurs platform usage.
+Run both. They exercise **different code paths**, and that difference has bitten
+once already: `validate_reference_pool.py` checks `build_harness`, which
+compares inside Octave, while rewards come from `build_candidate_runner` plus
+the host-side comparison. A defect found on 2026-08-08 made every correct
+matrix-valued answer score zero — 16.7% of the pool — while the Sandbox
+validation stayed green, because it was measuring the other path. See
+[PIPELINE_LOG.md](PIPELINE_LOG.md).
+
+Both paths now pass 9,000/9,000 hidden cases on the pinned GNU Octave 10.2.0:
+500 tasks at each of three levels, six cases each.
 
 ## Train with prime-rl
 
@@ -242,6 +285,9 @@ trace-ingestion commands.
 | `configs/prime-rl/` | Validated native training and inference configurations |
 | `scripts/curriculum_controller.py` | Checkpointed difficulty scheduler and held-out gates |
 | `scripts/validate_reference_pool.py` | Exhaustive reference validation in Prime Sandboxes |
+| `scripts/validate_local_runtime.py` | Same pool through the reward path, no Prime usage |
+| `scripts/fetch_pinned_octave.py` | Unpack the pinned Octave image without a Docker daemon |
+| `PIPELINE_LOG.md` | Defects found in the pipeline, blast radius, and why each survived |
 | `scripts/plot_*.py` | Reproducible calibration, reward, training, and timing figures |
 | `tests/` | Generation, parser, curriculum, checkpoint, and plotting regressions |
 | `artifacts/` | Compact aggregate metrics and figures only |

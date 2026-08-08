@@ -96,3 +96,9 @@ ENV/
 /artifacts/curriculum/live-2026-07-30/octave-staged-qwen/
 /artifacts/curriculum/live-2026-07-30/octave-real-segment-15-25-c2/
 /artifacts/curriculum/live-2026-07-30/controller/*.log
+
+# Baseline-eval rollout traces embed every hidden case with its expected value
+# AND the reference solution (verified 2026-08-08), so they must never be
+# committed. The compact aggregates beside them are safe and are kept.
+/artifacts/baseline-eval-*/**/traces.jsonl
+/artifacts/baseline-eval-*/**/*.log

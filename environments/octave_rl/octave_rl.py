@@ -6,9 +6,10 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import verifiers.v1 as vf
+from executors import execute_candidate_locally
 from generators import build_tasks
 from harness import (
     CANDIDATE_RESULT_MARKER_PREFIX,
@@ -28,6 +29,12 @@ from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
 SYSTEM_PROMPT = """Write GNU Octave functions. Return exactly one fenced `octave`
 code block containing the requested function. Do not return tests, files, prose, or
 shell commands. The function name and signature must exactly match the prompt."""
+
+# Where candidate code runs. "prime" provisions one short-lived Sandbox per
+# execution; "local" runs it on the calling host under the bounds in
+# ``executors``. Scoring, rewards, and the hidden-value boundary are identical.
+OctaveRuntime = Literal["prime", "local"]
+
 
 def attempt_multiplier(
     *,
@@ -89,13 +96,19 @@ async def execute_candidate_in_sandbox(
         timeout=60,
     )
     output = (proc.stdout or "") + (proc.stderr or "")
-    return score_candidate_output(
+    record = score_candidate_output(
         output,
         cases=task.cases,
         tolerance=task.tolerance,
         result_token=result_token,
         exit_code=proc.exit_code,
     )
+    record["runtime"] = "prime"
+    # The installed CPU Sandbox request model does not serialize a network
+    # policy, so egress denial cannot be claimed here either. Sandbox
+    # containment comes from separate hardware, not from a network namespace.
+    record["network_isolated"] = False
+    return record
 
 
 async def _execute_in_new_sandbox(
@@ -141,6 +154,24 @@ async def execute_candidate_in_new_sandbox(
     return await _execute_in_new_sandbox(task, source, purpose="candidate")
 
 
+async def execute_candidate(
+    task: OctaveData,
+    source: str,
+    *,
+    runtime: OctaveRuntime,
+    purpose: str,
+) -> dict[str, Any]:
+    """Route one candidate execution to the configured runtime.
+
+    Both branches produce the same record and enforce the same reward-relevant
+    boundary; they differ in where the interpreter runs. See ``executors`` for
+    what the local branch does and does not contain.
+    """
+    if runtime == "local":
+        return await execute_candidate_locally(task, source)
+    return await _execute_in_new_sandbox(task, source, purpose=purpose)
+
+
 async def execute_feedback_in_new_sandbox(
     task: OctaveData,
     source: str,
@@ -166,6 +197,10 @@ class OctaveUserConfig(vf.UserConfig):
     max_attempts: int = 2
     guide_enabled: bool = False
     guide_model: str = "Qwen/Qwen3.5-35B-A3B"
+    # NOT `runtime`: vf.UserConfig already defines `runtime: RuntimeConfig` for
+    # where the simulator process runs. Shadowing it with a string makes
+    # serve_user call .model_dump() on "local" and every rollout dies.
+    octave_runtime: OctaveRuntime = "prime"
 
 
 class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
@@ -248,9 +283,11 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 "feedback": "Expected one fenced or bare GNU Octave function.",
             }
         else:
-            result = await execute_feedback_in_new_sandbox(
+            result = await execute_candidate(
                 self.task,
                 code,
+                runtime=self.config.octave_runtime,
+                purpose="feedback",
             )
         solved = result["passed"] == result["total"]
         if solved or self.state.attempts >= self.config.max_attempts:
@@ -278,6 +315,7 @@ class OctaveTaskConfig(vf.TaskConfig):
     user: OctaveUserConfig = OctaveUserConfig()
     second_attempt_multiplier: float = 0.85
     guided_attempt_multiplier: float = 0.60
+    octave_runtime: OctaveRuntime = "prime"
 
 
 class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
@@ -289,7 +327,12 @@ class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
         return trace.state.done
 
     async def _execute(self, source: str) -> dict[str, Any]:
-        return await execute_candidate_in_new_sandbox(self.data, source)
+        return await execute_candidate(
+            self.data,
+            source,
+            runtime=self.config.octave_runtime,
+            purpose="candidate",
+        )
 
     async def validate(self, runtime: vf.Runtime) -> bool:
         result = await self._execute(self.data.reference)
@@ -393,10 +436,14 @@ def load_environment(
     """
     if max_turns < 1:
         raise ValueError("max_turns must be at least 1")
+    runtime: OctaveRuntime = str(kwargs.pop("octave_runtime", "prime"))  # type: ignore[assignment]
+    if runtime not in ("prime", "local"):
+        raise ValueError("octave_runtime must be 'prime' or 'local'")
     user_config = OctaveUserConfig(
         max_attempts=max_turns,
         guide_enabled=bool(kwargs.pop("guide_enabled", False)),
         guide_model=str(kwargs.pop("guide_model", "Qwen/Qwen3.5-35B-A3B")),
+        octave_runtime=runtime,
     )
     task_config = OctaveTaskConfig(
         user=user_config,
@@ -406,6 +453,7 @@ def load_environment(
         guided_attempt_multiplier=float(
             kwargs.pop("guided_attempt_multiplier", 0.60)
         ),
+        octave_runtime=runtime,
     )
     if kwargs:
         unknown = ", ".join(sorted(kwargs))
@@ -421,9 +469,10 @@ def load_environment(
 
 __all__ = [
     "OctaveTaskset",
-    # Re-exported: the comparison itself moved to ``harness`` so the scorer
-    # has one home, but it stays reachable here for callers and tests.
+    # Re-exported: the comparison itself moved to ``harness`` so both runtimes
+    # share one scorer, but it stays reachable here for callers and tests.
     "candidate_record_matches",
+    "execute_candidate",
     "load_environment",
 ]
 

@@ -1,0 +1,33 @@
+{
+  "octave": "GNU Octave, version 8.4.0",
+  "octave_binary": "/usr/bin/octave",
+  "network_isolated": true,
+  "isolation_prefix": "unshare --net --map-root-user --",
+  "seed": 0,
+  "num_tasks_per_level": 500,
+  "levels": [
+    {
+      "level": 1,
+      "tasks": 500,
+      "cases_passed": 3000,
+      "cases_total": 3000,
+      "failures": []
+    },
+    {
+      "level": 2,
+      "tasks": 500,
+      "cases_passed": 3000,
+      "cases_total": 3000,
+      "failures": []
+    },
+    {
+      "level": 3,
+      "tasks": 500,
+      "cases_passed": 3000,
+      "cases_total": 3000,
+      "failures": []
+    }
+  ],
+  "elapsed_seconds": 138.9,
+  "ok": true
+}

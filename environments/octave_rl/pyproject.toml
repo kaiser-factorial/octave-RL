@@ -14,7 +14,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include = ["octave_rl.py", "generators.py", "harness.py", "pyproject.toml"]
+include = [
+    "octave_rl.py",
+    "executors.py",
+    "generators.py",
+    "harness.py",
+    "pyproject.toml",
+]
 
 [tool.verifiers.eval]
 num_examples = 5

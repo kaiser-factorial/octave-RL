@@ -1,13 +1,89 @@
 # Octave RL handoff
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 This is the shortest trustworthy orientation for continuing the Octave RL
 work. Read `README.md` for the repository map, `REPORT.md` for the full
 experiment narrative, and `CURRICULUM.md` for controller behavior and command
-details.
+details. `PIPELINE_LOG.md` records defects found in the pipeline itself,
+their blast radius, and why each one survived earlier checks.
 
 ## Current status
+
+### 2026-08-08 corrected-scorer baseline — completed; Sandbox dependency removed
+
+**The reward path was scoring correct answers as zero on 16.7% of the task
+pool.** `build_candidate_runner` reports `actual(:)'`, which Octave flattens
+column-major, while the host-side comparison flattened the expected JSON
+row-major. The two agree for scalars and vectors and disagree for every
+genuinely two-dimensional result, so all of `broadcast_arith` (every level) and
+`struct_cell_wrangle` (levels 2 and 3) were worth exactly `0.0` regardless of
+what the model wrote — 250 of 1,500 tasks. Fixed in `harness._octave_flatten`;
+the candidate protocol is unchanged. See `PIPELINE_LOG.md` for the full entry.
+
+This defect entered with the 2026-08-05 reward hardening, so **the 2026-08-06
+two-step continuation was trained against a corrupted reward** and its
+`weights/step_2` policy should not be treated as a clean continuation base. The
+original 20-step run and its `0.905` result predate the hardening and were
+scored through `build_harness`, whose in-Octave comparison was always correct.
+
+The "9,000/9,000 hidden cases passed" line in earlier versions of this document
+validated `build_harness` — **not the path that computes rewards**. Both paths
+now pass 9,000/9,000 on the pinned interpreter.
+
+**Scoring no longer requires Prime Sandboxes.** `environments/octave_rl/executors.py`
+adds `octave_runtime = "local"` (default remains `"prime"`), running the same
+input-only runner on the calling host under `unshare --net` -> `chroot` into the
+pinned `gnuoctave/octave:10.2.0` rootfs -> `ulimit` bounds.
+`scripts/fetch_pinned_octave.py` unpacks that image straight from the registry
+with no Docker daemon, which matters because Prime pods are containers
+themselves. Hidden values and pass counters still never enter the interpreter
+running model output, because that property belongs to the runner, not the
+container. The full 1,500-task pool validates in ~199 s with zero Prime calls.
+
+**The blocked 2026-08-07 restart gate below is therefore obsolete.** It required
+a healthy Sandbox before provisioning; candidate scoring no longer touches the
+Sandbox service at all.
+
+A baseline evaluation ran on pod `092edcad9f6b4f7f96d5c89beb54945e` (2x RTX 6000
+Ada 48 GB, massedcompute, $1.50/hr) for 83 minutes — **$2.04 against a $12
+ceiling**, 256 rollouts, zero infrastructure errors, zero Sandbox calls. Tasks
+are seed `20260808`, disjoint from training and from every prior held-out seed.
+Full tables in `artifacts/baseline-eval-20260808/RESULTS.md`.
+
+| cell (32 tasks each) | raw | solved |
+| --- | ---: | ---: |
+| base L1 / L2 / L3, greedy | 0.7031 / 0.3750 / 0.4062 | 22 / 11 / 13 |
+| step-20 L1 / L2 / L3, greedy | 0.6406 / 0.5312 / 0.4062 | 20 / 16 / 13 |
+| base L1, T=1.0, thinking on | 0.0938 | 3 |
+| base L1, T=1.0, thinking off | 0.2865 | 9 |
+
+Four things follow, all of which change how the next run should be planned:
+
+1. **The 20-step policy shows no detectable single-turn capability gain.** Every
+   base-vs-step-20 difference is inside noise at n=32 (standard errors ~0.08).
+   What it measurably did improve is output discipline: format validity 1.00 and
+   zero truncation on levels 1 and 2. The historical `0.905` is not a
+   counterexample — it came from three attempts with a 35B guide under the old
+   reward protocol, where a correct first answer scored `1.1`.
+2. **Measure the G1 band at the rollout temperature, not greedy.** GRPO's
+   advantage comes from reward spread within a sample group. Level 1 reads
+   `0.7031` greedy but `0.2865` at T=1.0 — outside the 10-35% band by the first
+   number and inside it by the second. Do not raise temperature to widen the
+   band: at T != 1.0 the sampled distribution stops matching the one whose
+   log-probs the trainer scores. Move difficulty instead.
+3. **`reasoning_effort = "none"` does not disable thinking.** Only
+   `enable_thinking = false` at the renderer does. With thinking on at a
+   1024-token cap: 87.9% truncation, mean completion exactly at the cap, format
+   validity `0.12`. Those are structural zeros that look like a capability
+   result; check `finish_reason` and `format_ok` before believing a low score.
+4. **Level 3 is not harder than Level 2 for this model** (0.406 vs 0.375 base,
+   identical solve counts for step-20). Reweighting toward Level 3 will not
+   create headroom; a genuine Level 4 looks necessary rather than optional.
+
+Incidentally, the T=1.0 thinking-off cell scores `0.2865` against the historical
+July 29 calibration's `0.2817` — a replication, and independent evidence that
+the flattening defect never touched the calibration numbers.
 
 ### 2026-08-07 Qwen continuation — blocked before GPU provisioning; Prime report submitted
 
@@ -627,16 +703,23 @@ disjoint from training and record its seed, policy hash, and source trace.
 
 ## Verification at handoff
 
-- Repository tests: 60 passed.
+- Repository tests: 66 passed, 6 skipped (the skips need a local `octave`
+  binary; `unshare` is Linux-only, so scoring tests opt out of namespace
+  isolation explicitly on macOS).
 - Focused Ruff checks: passed.
 - Python compilation: passed.
-- Reference validation: 9,000/9,000 hidden cases passed.
-- Retrieved adapter checksum: verified.
+- Reference validation through the **reward** path: 9,000/9,000 hidden cases on
+  the pinned GNU Octave 10.2.0 (`artifacts/pinned_pool_validation.json`).
+- Baseline evaluation: 256 rollouts, zero infrastructure errors, zero Sandbox
+  calls (`artifacts/baseline-eval-20260808/`).
+- Retrieved step-2 adapter checksum: verified (2026-08-06; unchanged since).
+- Qwen *training*: still not launched. The 2026-08-08 pod ran evaluation only,
+  so no optimizer step has been taken against the corrected reward.
 - Active Prime pods: zero.
 - Active Prime Sandboxes: zero.
-- Four fresh 2026-08-07 Sandbox probes: none reached `RUNNING`; all deleted.
-- Prime Sandbox bug report: accepted (`Feedback submitted`).
-- Qwen training under the renewed $12 ceiling: not launched.
+- Baseline pod spend: $2.04 of the authorized $12.
+- Raw rollout traces are gitignored: they embed every hidden case with its
+  expected value **and** the reference solution (verified 2026-08-08).
 
 If results in this handoff conflict with an older narrative, prefer
 `artifacts/curriculum/live-2026-07-30/experiment-summary.json` for measured
