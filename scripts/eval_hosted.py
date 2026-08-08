@@ -123,6 +123,17 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=HELD_OUT_SEED)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument(
+        "--num-rollouts",
+        type=int,
+        default=1,
+        help=(
+            "Rollouts per task. >1 with --cells sampled measures within-group "
+            "reward spread directly, which is what decides whether a group "
+            "carries any GRPO advantage. Pointless with greedy (T=0 is "
+            "deterministic, so every rollout in the group is identical)."
+        ),
+    )
+    parser.add_argument(
         "--cells",
         nargs="+",
         default=["greedy", "sampled"],
@@ -146,14 +157,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    cells = {"greedy": (0.0, 1), "sampled": (1.0, 1)}
+    # Greedy stays at one rollout however --num-rollouts is set: T=0 is
+    # deterministic, so a group of 8 would be 8 copies of one answer.
+    cells = {"greedy": (0.0, 1), "sampled": (1.0, args.num_rollouts)}
     slug = args.model.rsplit("/", 1)[-1].lower()
+    suffix = f"-g{args.num_rollouts}" if args.num_rollouts > 1 else ""
 
     jobs = []
     for cell in args.cells:
         temperature, rollouts = cells[cell]
         for level in args.levels:
-            name = f"{slug}-{cell}-l{level}"
+            name = f"{slug}-{cell}{suffix if cell == 'sampled' else ''}-l{level}"
             config = render(
                 args.output / "configs" / f"{name}.toml",
                 model=args.model,
@@ -175,7 +189,8 @@ def main() -> int:
     print(f"model     : {args.model}")
     print(f"thinking  : off (reasoning_effort={args.reasoning_effort!r})")
     print(f"cells     : {', '.join(args.cells)}")
-    print(f"rollouts  : {len(jobs) * args.num_tasks}")
+    total = sum(args.num_tasks * (args.num_rollouts if j["cell"] == "sampled" else 1) for j in jobs)
+    print(f"rollouts  : {total}")
     for job in jobs:
         print(f"  {job['name']}")
     if args.plan:

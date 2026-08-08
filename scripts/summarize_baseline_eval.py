@@ -9,6 +9,14 @@ The Wilson lower bound is on *fully solved* rate, which is a proportion. Mean
 case fraction is not a proportion of trials, so it gets a standard error
 instead.
 
+That standard error is **clustered by task** whenever a run has more than one
+rollout per task. Rollouts of one task by one policy are strongly correlated --
+measured at 2.0-4.6x binomial dispersion on 2026-08-08 -- so treating 256
+rollouts over 32 tasks as 256 independent trials understates the error by
+roughly the square root of that, about 2x. The effective sample size is nearer
+the task count than the rollout count, and the table reports it so an
+over-precise interval is visible rather than inferred.
+
 Usage:
     uv run python scripts/summarize_baseline_eval.py --root /workspace/baseline-eval
 """
@@ -47,6 +55,7 @@ def summarize(path: Path) -> dict[str, Any] | None:
     completion_tokens: list[int] = []
     format_ok: list[float] = []
     errors = 0
+    by_task: dict[Any, list[float]] = {}
     for row in rows:
         if row.get("errors"):
             errors += 1
@@ -55,6 +64,8 @@ def summarize(path: Path) -> dict[str, Any] | None:
             value = float(metrics["raw_case_fraction"])
             raw.append(value)
             solved += value == 1.0
+            name = ((row.get("task") or {}).get("data") or {}).get("name")
+            by_task.setdefault(name, []).append(value)
         if "format_ok" in metrics:
             format_ok.append(float(metrics["format_ok"]))
         for call in row.get("calls") or []:
@@ -67,11 +78,22 @@ def summarize(path: Path) -> dict[str, Any] | None:
     if not raw:
         return {"cell": path.parent.name, "rollouts": len(rows), "errors": errors,
                 "note": "no scored rollouts"}
+    # Cluster by task: the independent unit is the task, not the rollout. With
+    # one rollout per task this reduces to the ordinary standard error, so the
+    # single-rollout runs it was written for are unaffected.
+    task_means = [statistics.mean(v) for v in by_task.values()]
+    if len(task_means) > 1:
+        stderr = statistics.stdev(task_means) / math.sqrt(len(task_means))
+    else:
+        stderr = 0.0
     return {
         "cell": path.parent.name,
         "rollouts": len(raw),
+        "tasks": len(task_means),
+        "rollouts_per_task": round(len(raw) / len(task_means), 2) if task_means else None,
         "raw_case_fraction": round(statistics.mean(raw), 4),
-        "raw_case_fraction_stderr": round(
+        "raw_case_fraction_stderr": round(stderr, 4),
+        "raw_case_fraction_stderr_naive": round(
             statistics.stdev(raw) / math.sqrt(len(raw)), 4
         ) if len(raw) > 1 else 0.0,
         "solved": solved,
