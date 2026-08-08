@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 import re
 from pathlib import Path
@@ -17,10 +16,11 @@ from harness import (
     SANDBOX_CREATION_MAX_ATTEMPTS,
     SANDBOX_FINALIZE_TIMEOUT_SECONDS,
     build_candidate_runner,
+    candidate_record_matches,
     extract_code,
     format_ok,
     new_result_token,
-    parse_candidate_records,
+    score_candidate_output,
 )
 from openai import AsyncOpenAI
 from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
@@ -52,59 +52,6 @@ class OctaveData(vf.TaskData):
     tolerance: float
     require_vectorized: bool
     reference: str
-
-
-def _octave_shape(value: Any) -> list[int]:
-    if not isinstance(value, list):
-        return [1, 1]
-    if not value:
-        return [1, 0]
-    if all(not isinstance(item, list) for item in value):
-        return [1, len(value)]
-    if not all(isinstance(item, list) for item in value):
-        return []
-    widths = {len(item) for item in value}
-    return [len(value), widths.pop()] if len(widths) == 1 else []
-
-
-def _flatten(value: Any) -> list[Any]:
-    if isinstance(value, list):
-        return [item for child in value for item in _flatten(child)]
-    return [value]
-
-
-def _as_float(value: Any) -> float:
-    if value is None:
-        return math.nan
-    if isinstance(value, bool):
-        raise TypeError("boolean outputs are not supported")
-    return float(value)
-
-
-def candidate_record_matches(
-    record: dict[str, Any],
-    *,
-    expected: Any,
-    tolerance: float,
-) -> bool:
-    """Compare one isolated candidate result with the hidden expected value."""
-    if record.get("ok") is not True:
-        return False
-    try:
-        actual_shape = [int(item) for item in record["shape"]]
-        actual_values = [_as_float(item) for item in _flatten(record["values"])]
-        expected_values = [_as_float(item) for item in _flatten(expected)]
-    except (KeyError, TypeError, ValueError):
-        return False
-    if actual_shape != _octave_shape(expected) or len(actual_values) != len(expected_values):
-        return False
-    for actual, target in zip(actual_values, expected_values, strict=True):
-        if math.isnan(target):
-            if not math.isnan(actual):
-                return False
-        elif not math.isfinite(actual) or abs(actual - target) > tolerance * max(1.0, abs(target)):
-            return False
-    return True
 
 
 async def execute_candidate_in_sandbox(
@@ -142,32 +89,13 @@ async def execute_candidate_in_sandbox(
         timeout=60,
     )
     output = (proc.stdout or "") + (proc.stderr or "")
-    records = parse_candidate_records(
+    return score_candidate_output(
         output,
-        expected_total=len(task.cases),
+        cases=task.cases,
+        tolerance=task.tolerance,
         result_token=result_token,
+        exit_code=proc.exit_code,
     )
-    passed = (
-        sum(
-            candidate_record_matches(
-                record,
-                expected=case["expected"],
-                tolerance=task.tolerance,
-            )
-            for record, case in zip(records, task.cases, strict=True)
-        )
-        if records is not None
-        else 0
-    )
-    total = len(task.cases)
-    return {
-        "passed": passed,
-        "total": total,
-        "fraction": passed / total if total else 0.0,
-        "structured_result": float(records is not None),
-        "exit_code": proc.exit_code,
-        "feedback": output[-2000:],
-    }
 
 
 async def _execute_in_new_sandbox(
@@ -491,7 +419,13 @@ def load_environment(
     ))
 
 
-__all__ = ["OctaveTaskset", "load_environment"]
+__all__ = [
+    "OctaveTaskset",
+    # Re-exported: the comparison itself moved to ``harness`` so the scorer
+    # has one home, but it stays reachable here for callers and tests.
+    "candidate_record_matches",
+    "load_environment",
+]
 
 
 if __name__ == "__main__":

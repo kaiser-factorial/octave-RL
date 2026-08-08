@@ -159,6 +159,46 @@ def test_candidate_record_comparison_preserves_shape_and_nan() -> None:
     )
 
 
+def test_matrix_results_are_compared_in_octave_column_major_order() -> None:
+    # The runner reports actual(:)', which Octave emits column by column, while
+    # the expected value nests row by row. Comparing the two orders directly
+    # scored every correct two-dimensional answer as zero on every case.
+    expected = [[-4, -3, -4, -8], [3, 4, 3, -1]]
+    correct = {
+        "ok": True,
+        "shape": [2, 4],
+        "values": [-4, 3, -3, 4, -4, 3, -8, -1],
+    }
+    assert candidate_record_matches(correct, expected=expected, tolerance=1e-9)
+
+    # A transposed answer has the same multiset of values and must still fail.
+    transposed = {
+        "ok": True,
+        "shape": [4, 2],
+        "values": [-4, -3, -4, -8, 3, 4, 3, -1],
+    }
+    assert not candidate_record_matches(transposed, expected=expected, tolerance=1e-9)
+
+
+def test_column_major_reordering_leaves_vectors_and_scalars_alone() -> None:
+    # These orders coincide, which is exactly why the matrix bug stayed hidden.
+    assert candidate_record_matches(
+        {"ok": True, "shape": [1, 3], "values": [1, 2, 3]},
+        expected=[1, 2, 3],
+        tolerance=1e-9,
+    )
+    assert candidate_record_matches(
+        {"ok": True, "shape": [3, 1], "values": [1, 2, 3]},
+        expected=[[1], [2], [3]],
+        tolerance=1e-9,
+    )
+    assert candidate_record_matches(
+        {"ok": True, "shape": [1, 1], "values": [7]},
+        expected=7,
+        tolerance=1e-9,
+    )
+
+
 def test_final_scoring_compares_candidate_values_outside_the_sandbox(monkeypatch) -> None:
     token = "trusted-token"
     monkeypatch.setattr(octave_environment, "new_result_token", lambda: token)
