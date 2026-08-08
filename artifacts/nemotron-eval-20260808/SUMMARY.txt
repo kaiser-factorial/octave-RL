@@ -1,0 +1,8 @@
+cell                    n      raw     +/-   solved  wilson_lb   trunc   tokens    fmt  err
+-------------------------------------------------------------------------------------------
+nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l1   32   0.5938  0.0882    19/32     0.4226   0.000    134.4   1.00    0
+nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l2   32   0.3438  0.0853    11/32     0.2041   0.000    240.8   1.00    0
+nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l3   32   0.1250  0.0594     4/32     0.0497   0.000    193.8   1.00    0
+nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l1   32   0.4792  0.0882    15/32     0.3087   0.000    199.4   1.00    0
+nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l2   32   0.3750  0.0870    12/32     0.2293   0.031    269.0   0.97    0
+nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l3   32   0.1250  0.0594     4/32     0.0497   0.000    171.9   1.00    0

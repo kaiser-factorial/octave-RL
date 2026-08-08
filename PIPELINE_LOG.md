@@ -30,6 +30,139 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — Thinking-off is a different knob on each client, and the eval client's config is not the train client's
+
+**Symptom.** The first hosted-eval config, written by analogy to
+`scripts/run_baseline_eval.py`, failed validation with three errors at once:
+`--client.eval.base-url Input should be a valid string`,
+`--client.eval.skip-model-check Extra inputs are not permitted`,
+`--client.eval.renderer Extra inputs are not permitted`.
+
+**Root cause.** `ClientConfig` is a discriminated union. `TrainClientConfig`
+(`type = "train"`) tokenizes client-side against a vLLM generate endpoint, so it
+carries `renderer`, `renderer_model_name` and `pool_size`. `EvalClientConfig`
+(`type = "eval"`, the default) is an httpx relay to a hosted provider that
+applies the chat template *server-side*, so it carries none of them —
+`base_url` is a `str`, and `skip_model_check` does not exist on either.
+
+The consequential half is what that implies about thinking. The baseline entry
+in `artifacts/baseline-eval-20260808/RESULTS.md` records, correctly, that
+`reasoning_effort = "none"` in `[sampling]` did *not* suppress Qwen's thinking
+and only `[client.renderer] enable_thinking = false` did. That finding is
+**scoped to the train client**: sampling args go to a generate endpoint that has
+already been handed rendered tokens, so the knob has nothing to act on. On the
+eval client the relationship inverts — there is no renderer to set, and the
+sampling arg is the only lever. Carrying the train-path rule across would have
+produced a config with no way to turn thinking off at all.
+
+Measured on the BF16 Nemotron endpoint before the run (17×23, 200-token cap):
+none given → 60 completion tokens / 152 chars of `reasoning_content`;
+`reasoning_effort = "low"` → 60 / 152 (a no-op);
+`reasoning_effort = "none"` → 4 / 0;
+`chat_template_kwargs = { enable_thinking = false }` → 4 / 0.
+
+**Blast radius.** No published number. Caught at config validation before any
+rollout ran. The risk it points at is unpublished-number-shaped, though: had the
+schema happened to accept the block, thinking would have stayed on — Nemotron's
+renderer defaults `enable_thinking = True` where Qwen's defaults to `None` — and
+the run would have returned a plausible low score rather than an error. That is
+exactly the shape of ctl A in the baseline run: 87.9% truncation and 0.12 format
+validity reported as if it were capability.
+
+**Why it survived.** Nothing had exercised the eval client. Every prior number
+in this project came from one model on a pod-local vLLM through the train
+client, so "the config that works" and "the train client's config" had never
+needed to be distinguished. A second serving mode was the check.
+
+**Fix.** `scripts/eval_hosted.py` drops `[client.renderer]` and
+`skip_model_check`, passes `base_url` as a string, and sets
+`reasoning_effort = "none"` in `[sampling]`. The measured knob table is a
+comment in the file, next to the value it justifies. `--validate` was added:
+it appends `--dry-run`, which resolves and dumps the fully-defaulted config
+without spending a token — cheaper than discovering a schema mismatch mid-run.
+The script also refuses to start with `PRIME_API_KEY` unset rather than letting
+`resolve_api_key` fall through to the literal `"EMPTY"` and produce a wall of
+auth failures, and prefers `.venv/bin/eval` over `uv run eval` so a sync cannot
+prune the editable `octave_rl` install mid-script.
+
+**Verification.** `--validate` on all six cells resolves clean. Across the 192
+rollouts of the real run: 192/192 calls report
+`model = nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` and
+`endpoint = /chat/completions`, sampling splits exactly 96 at T=0.0 / 96 at
+T=1.0, **0** responses carry `reasoning_content`, **0** carry a `<think>` tag,
+truncation is 0.000 and format validity 1.00 (against ctl A's 0.879 / 0.12 with
+thinking on), and 191/192 finish with `stop` rather than `length`.
+
+**Residual risk.** `SamplingConfig` sets `extra = "allow"`, so a misspelled
+sampling key is forwarded to the provider rather than rejected. A provider that
+ignores unknown fields will accept it silently. Thinking-off should be confirmed
+from the traces — zero `reasoning_content`, plausible completion lengths — not
+from the config alone. Separately, `reasoning_effort = "none"` is honoured by
+this provider's deployment; it is not a guarantee about another endpoint serving
+the same weights.
+
+---
+
+## 2026-08-08 — Nemotron runs the pipeline end to end for 2 cents, and reweights the curriculum
+
+**Symptom.** Not a defect. Recording the first hosted run because it changes
+what the earlier conclusions are scoped to.
+
+**What ran.** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` on Prime Inference,
+6 cells (greedy + T=1.0 × levels 1–3), 32 tasks each, single-turn, no guide,
+scored in-container against the pinned Octave 10.2.0 rootfs. 192 rollouts,
+$0.0213, 7.5 minutes, zero infrastructure errors, zero Sandbox calls, no GPU.
+Seed `20260808` with pool 500 — the same draw as `baseline-eval-20260808`, so
+the Qwen and Nemotron cells saw the *identical* 32 tasks per level (32/32 name
+overlap verified) and the comparison is paired.
+
+**What it changes.**
+
+*Two prior conclusions turn out to be Qwen-specific, not taskset properties.*
+The baseline run found Level 3 no harder than Level 2 (0.406 vs 0.375) and
+inferred that a genuine Level 4 was "necessary rather than optional". Nemotron's
+ladder separates cleanly — 0.594 / 0.344 / 0.125 greedy — so the flatness was a
+property of the measuring instrument. Paired McNemar on the same tasks: L1
+p = 0.55, L2 p = 1.00, L3 p = 0.012 (10 Qwen-only solves against 1 Nemotron-only).
+The models differ on exactly one level, and it is the one where the earlier
+instrument was flat.
+
+*The G1 band picks a different level per model.* At the rollout temperature
+Nemotron is L1 0.479 / L2 0.375 / L3 0.125 against WS3's 10–35% band, so the
+in-band level is L3. For Qwen it was L1 (0.2865). A curriculum mix routed off
+the Qwen numbers would place Nemotron mostly above band.
+
+*And that collides with `group_size = 2`.* Reward is 98.9% binary here (190 of
+192 rollouts exactly 0.0 or 1.0), so advantage exists only in non-unanimous
+groups. Expected degenerate-group fraction at L3's p = 0.125 is **0.781** at
+g = 2, 0.586 at g = 4, 0.344 at g = 8. The level that puts this model in band is
+the level that wastes the most rollouts at the current group size; the two
+settings cannot be chosen independently.
+
+*The failure profile is better shaped.* Of 125 zero-scoring rollouts: 52.8%
+errored on every case, 40.0% ran cleanly with a wrong algorithm, 6.4% returned
+an exact transpose, 0.8% (one rollout) failed to emit a parseable function.
+Qwen's split was 19.6% unparseable and 21.0% ran-but-wrong. More of the signal
+lands on the algorithm and less on output formatting — which is what the
+environment is meant to measure. The transpose detector fires on this model too
+(8 rollouts), so the orientation hint is not Qwen-specific scaffolding.
+
+**Why it survived.** Nothing was hiding. But every number before this one came
+from one model on one serving mode, and three of the conclusions drawn from
+them read as statements about the environment when they were statements about
+Qwen. One hosted model at 2 cents was enough to separate the two, which is a
+cheaper check than it looks and should run before any conclusion about the
+taskset is treated as settled.
+
+**Residual risk.** n=32, one rollout per task, one seed; only the L3 difference
+is significant. The degenerate-group table assumes independent rollouts within a
+group, which understates waste. Provider-side serving config for a hosted
+endpoint is not pinned the way the interpreter is, so a hosted number is not
+reproducible in the sense a pod number is. Full write-up:
+`artifacts/nemotron-eval-20260808/RESULTS.md`.
+
+---
+
 ## 2026-08-08 — Efficiency pressure belongs in the advantage, not in the reward
 
 **Observation.** The attempt multipliers (1.00 / 0.85 / 0.60) discount the

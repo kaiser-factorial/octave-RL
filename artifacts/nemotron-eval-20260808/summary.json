@@ -1,0 +1,82 @@
+{
+  "cells": [
+    {
+      "cell": "nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l1",
+      "rollouts": 32,
+      "raw_case_fraction": 0.5938,
+      "raw_case_fraction_stderr": 0.0882,
+      "solved": 19,
+      "solve_rate": 0.5938,
+      "solve_rate_wilson_lb": 0.4226,
+      "format_ok": 1.0,
+      "truncation_rate": 0.0,
+      "mean_completion_tokens": 134.4,
+      "errors": 0
+    },
+    {
+      "cell": "nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l2",
+      "rollouts": 32,
+      "raw_case_fraction": 0.3438,
+      "raw_case_fraction_stderr": 0.0853,
+      "solved": 11,
+      "solve_rate": 0.3438,
+      "solve_rate_wilson_lb": 0.2041,
+      "format_ok": 1.0,
+      "truncation_rate": 0.0,
+      "mean_completion_tokens": 240.8,
+      "errors": 0
+    },
+    {
+      "cell": "nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l3",
+      "rollouts": 32,
+      "raw_case_fraction": 0.125,
+      "raw_case_fraction_stderr": 0.0594,
+      "solved": 4,
+      "solve_rate": 0.125,
+      "solve_rate_wilson_lb": 0.0497,
+      "format_ok": 1.0,
+      "truncation_rate": 0.0,
+      "mean_completion_tokens": 193.8,
+      "errors": 0
+    },
+    {
+      "cell": "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l1",
+      "rollouts": 32,
+      "raw_case_fraction": 0.4792,
+      "raw_case_fraction_stderr": 0.0882,
+      "solved": 15,
+      "solve_rate": 0.4688,
+      "solve_rate_wilson_lb": 0.3087,
+      "format_ok": 1.0,
+      "truncation_rate": 0.0,
+      "mean_completion_tokens": 199.4,
+      "errors": 0
+    },
+    {
+      "cell": "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l2",
+      "rollouts": 32,
+      "raw_case_fraction": 0.375,
+      "raw_case_fraction_stderr": 0.087,
+      "solved": 12,
+      "solve_rate": 0.375,
+      "solve_rate_wilson_lb": 0.2293,
+      "format_ok": 0.9688,
+      "truncation_rate": 0.0312,
+      "mean_completion_tokens": 269.0,
+      "errors": 0
+    },
+    {
+      "cell": "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l3",
+      "rollouts": 32,
+      "raw_case_fraction": 0.125,
+      "raw_case_fraction_stderr": 0.0594,
+      "solved": 4,
+      "solve_rate": 0.125,
+      "solve_rate_wilson_lb": 0.0497,
+      "format_ok": 1.0,
+      "truncation_rate": 0.0,
+      "mean_completion_tokens": 171.9,
+      "errors": 0
+    }
+  ]
+}

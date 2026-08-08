@@ -1,0 +1,38 @@
+[
+  {
+    "name": "nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l1",
+    "cell": "greedy",
+    "level": 1,
+    "config": "outputs/hosted-eval/configs/nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l1.toml"
+  },
+  {
+    "name": "nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l2",
+    "cell": "greedy",
+    "level": 2,
+    "config": "outputs/hosted-eval/configs/nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l2.toml"
+  },
+  {
+    "name": "nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l3",
+    "cell": "greedy",
+    "level": 3,
+    "config": "outputs/hosted-eval/configs/nvidia-nemotron-3-nano-30b-a3b-bf16-greedy-l3.toml"
+  },
+  {
+    "name": "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l1",
+    "cell": "sampled",
+    "level": 1,
+    "config": "outputs/hosted-eval/configs/nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l1.toml"
+  },
+  {
+    "name": "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l2",
+    "cell": "sampled",
+    "level": 2,
+    "config": "outputs/hosted-eval/configs/nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l2.toml"
+  },
+  {
+    "name": "nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l3",
+    "cell": "sampled",
+    "level": 3,
+    "config": "outputs/hosted-eval/configs/nvidia-nemotron-3-nano-30b-a3b-bf16-sampled-l3.toml"
+  }
+]
