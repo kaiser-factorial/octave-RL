@@ -29,14 +29,21 @@ Seven of eight pre-registered criteria passed outright. Mismatch KL was two
 orders of magnitude inside the 0.015 line (the 2026-08-06 run sat at 0.0176).
 Zero rollout infrastructure errors, zero Sandbox calls, `enable_router_replay =
 false` verified in the *resolved* config, and the step-3 adapter SHA-256 checked
-remote-to-local. The eighth criterion is partial: the guide's credential path
-was proven in a preflight (isolated mode-0700 `HOME`, no `PRIME_API_KEY` in the
-environment, a real hint returned and billed) but it never fired in training,
-because turns averaged 1.5-2.2 and it only triggers when attempt 2 fails.
+remote-to-local. The guide's credential path was proven in a preflight
+(isolated mode-0700 `HOME`, no `PRIME_API_KEY` in the environment, a real hint
+returned and billed) **and it fired in training** -- hints appear in 3 of 15
+retained rollout sequences. An earlier draft claimed it never fired; that came
+from grepping logs for text that only exists tokenized inside the rollout
+blobs.
 
-**Two things to settle before a longer run.** Entropy fell 53% across three
-steps (0.7954 -> 0.3754); that slope sustained over 20+ steps is the most
-likely way a long run ends badly, so it needs an explicit stopping rule.
+**Two things to settle before a longer run.** The entropy decline reported
+earlier was a batch-composition artifact, not policy sharpening -- the exported
+adapter moved the weights by ~0.015% relative, which cannot halve entropy. The
+real constraint is that the reward is effectively binary (95.7% of 256 rollouts
+scored exactly 0 or 1), so at `group_size = 2` about **59% of rollouts produce
+no gradient at all** -- predicted 59.1%, observed 58.3%. Raise `group_size` to
+4-8 while holding `max_inflight_rollouts = 2`; those are different knobs and
+were conflated.
 And integrated evaluation remains unsafe on this stack, so a real run still
 needs the merge -> serve-at-concurrency-one -> ingest cycle between train-only
 chunks rather than in-loop eval.

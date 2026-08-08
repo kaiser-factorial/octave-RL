@@ -30,7 +30,7 @@ Registered before the run, not after seeing the numbers.
 | 4 | trainer/inference mismatch KL < 0.015 | **pass** — 0.0003-0.0004 |
 | 5 | finite loss, no entropy collapse | **pass**, with a caveat below |
 | 6 | STABLE checkpoint + adapter round-trip | **pass** — SHA-256 verified remote to local |
-| 7 | guide hints actually retrieved | **partial** — see below |
+| 7 | guide hints actually retrieved | **pass** — see correction below |
 | 8 | zero Prime Sandbox calls | **pass** — zero references in any log, zero in inventory |
 
 **On criterion 7.** The guide's credential path was proven in a preflight before
@@ -38,10 +38,11 @@ any GPU spend: with `PRIME_API_KEY` removed from the environment and only an
 isolated mode-0700 `HOME` holding a mode-0600 `.prime/config.json`, the 35B
 returned a correct hint (`"...computes the mean along dimension 2 (rows), but
 'column means' requires dimension 1"`), and the $0.0048 inference charge
-confirms the call was billed. It did **not** fire during the three training
-steps: the guide only triggers when attempt 2 fails, and turns averaged 1.5-2.2,
-so few rollouts reached a third attempt. The mechanism is verified; its
-in-training behaviour is not yet.
+confirms the call was billed. It **did** fire during training: decoding the
+retained rollout token IDs finds hints in 3 of 15 unique sequences. An earlier
+version of this file said otherwise, based on grepping the env log — but the
+hint is injected into the user message content and is stored tokenized in the
+rollout blobs, never as log text, so that check could only ever return zero.
 
 ## Read this before scaling up
 
@@ -49,10 +50,19 @@ in-training behaviour is not yet.
 0.93 on batches of 8. That is variance, not progress. Step 3's 0.9250 is a
 small-sample artifact and should not be quoted as a capability number.
 
-**Entropy fell 53% in three steps** (0.7954 -> 0.4917 -> 0.3754). Nothing here
-is collapsed, but that slope over a 20+ step run is the thing most likely to
-end it badly. Watch entropy per step, and treat a continued decline as a
-stopping condition rather than a curiosity.
+**The entropy decline was a measurement artifact, not sharpening.** The
+exported step-3 adapter moved the weights by an RMS of 1.53e-6 against a base
+scale of ~1e-2 — about 0.015% relative — which cannot halve policy entropy.
+Entropy tracked batch length instead: peak trainer memory fell monotonically
+(11.7 -> 11.0 -> 10.2 GiB) as steps 1-2's three-attempt truncated failures gave
+way to step 3's short first-attempt solves.
+
+**The real constraint is reward density.** 95.7% of 256 baseline rollouts
+scored exactly 0.0 or 1.0, so a GRPO group teaches nothing unless its samples
+disagree. At the measured Level-1 pass rate of 0.2865, `group_size = 2` wastes
+a predicted 59.1% of rollouts; observed waste was 58.3%. Raise `group_size` to
+4 (26.6% waste) or 8 (6.7%), holding `max_inflight_rollouts = 2` — the CUDA
+limit was on simultaneous generations, which is a different knob.
 
 **Truncation is binding.** 50% of calls hit the cap on steps 1 and 2. The
 1536-token budget is tight for three attempts; the project has already measured

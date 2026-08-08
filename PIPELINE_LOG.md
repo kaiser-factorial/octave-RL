@@ -30,6 +30,144 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — Correction: the guide DID fire; and most failures are execution errors, not wrong answers
+
+**Two corrections and one substantive finding, from decoding the retained
+rollouts rather than grepping logs.**
+
+**Correction 1: the guide fired.** The smoke entry below says it never did.
+That check was invalid: the hint is injected into the *user message content*,
+which is stored tokenized in `rollouts/*/rank_0.bin`, never as text in any log,
+so `grep "Guide hint"` could not have found it either way. Decoding the token
+IDs with the model tokenizer finds hints in **3 of 15** unique retained
+sequences, and they are substantive, e.g.
+
+> *"The function fails for multi-dimensional inputs because `ndims(x)` returns
+> the number of dimensions, not the actual dimension index; therefore, inputs
+> with 3 or more dimensions are incorrectly rejected by the final `else`
+> block"*
+
+A per-rollout firing rate cannot be recovered from the retained artifacts,
+because the rollout files hold the post-filter trainable batch rather than
+every rollout. To measure it properly, log a counter in `OctaveUser`.
+
+**Correction 2: check content, not logs.** The general lesson is the same one
+this file keeps recording — the check has to touch the mechanism. A log grep
+for a value that never enters the log will always return zero, and zero looks
+like an answer.
+
+**Finding: the zeros are mostly broken code, not wrong code.** Across the 138
+zero-score rollouts in the 256-rollout baseline:
+
+| what happened | count | share |
+| --- | ---: | ---: |
+| errored on **every** hidden case (`ok:false`, empty shape/values) | 82 | 59.4% |
+| ran successfully but computed wrong values | 29 | 21.0% |
+| never produced a parseable result at all | 27 | 19.6% |
+
+So roughly **79% of failures are the model failing to produce executable
+Octave**, not failing to produce correct Octave. Three consequences:
+
+1. **This is why the reward is binary.** A function that throws scores 0/6 by
+   construction. Partial credit needs code that runs and is right on some cases
+   — rare. It explains the 4.3% graduated rate directly.
+2. **This is why the tutor rarely rescues a rollout.** The guide receives the
+   first diagnostic line and returns one hint of at most 96 tokens. When the
+   candidate errors on all six cases the diagnostic is a runtime error, and one
+   short hint seldom repairs a fundamentally broken function inside one more
+   attempt at the same token budget.
+3. **The environment currently measures Octave execution competence more than
+   algorithmic reasoning.** For WS3 that is a substantive property of the
+   substrate, not a detail: the behaviour RL will chase here is "emit runnable
+   code" well before "emit correct code".
+
+The 19.6% that never produced a parseable result are largely truncation, which
+also means a hint cannot help — the model never finished its answer.
+
+## 2026-08-08 — Retraction: the entropy "collapse" was a batch-composition artifact
+
+**Claim retracted.** The 2026-08-08 smoke entry below flagged a 53% entropy
+decline (0.7954 -> 0.4917 -> 0.3754) as the main risk to a longer run. Log
+analysis says that reading was wrong, and the real findings are elsewhere.
+
+**Why it cannot be policy sharpening.** The exported step-3 adapter gives the
+effective weight change directly. Summed over all 128 adapted matrices,
+`||dW_eff||_F = 0.0773`; the largest single element moved by `1.16e-5`; RMS
+element-wise change is **1.53e-6** against base weights of order `1e-2`. That
+is a relative perturbation of about **0.015%**. Three steps at lr `1e-5` with
+grad norms 0.11-0.22 on rank-16 LoRA cannot halve a policy's entropy, and did
+not.
+
+**What the number actually tracked: batch length.** Entropy is a mean over the
+tokens in each training batch, and the batches differed enormously.
+
+| step | entropy | turns | truncation | peak trainer mem |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 0.7954 | 2.0 | 50% | 11.7 GiB |
+| 2 | 0.4917 | 2.2 | 50% | 11.0 GiB |
+| 3 | 0.3754 | 1.5 | 0% | 10.2 GiB |
+
+Peak memory falls monotonically with batch token count. Steps 1-2 were
+dominated by three-attempt failures that ran to the 1536-token cap — long,
+uncertain, high-entropy text. Step 3's effective pair was short first-attempt
+solves. Grad norm is also non-monotonic (0.109 -> 0.216 -> 0.113), which no
+steady-sharpening story explains. With `batch_size 8 / group_size 2` a step
+trains on **four distinct tasks**, so task-to-task variance dominates every
+per-step statistic.
+
+**Lesson.** Per-step scalars from a 3-step run on 4 tasks are not a trend.
+Before treating one as a trend, check whether the batch composition changed —
+`turns`, `truncation` and peak memory are the tells, and the adapter norm
+settles it outright.
+
+---
+
+## 2026-08-08 — The graduated reward is effectively binary, and group_size 2 wastes 59% of rollouts
+
+**Symptom.** Across **256 baseline rollouts**, `raw_case_fraction` was exactly
+0.0 or exactly 1.0 in **95.7%** of cases: 138 zero, 107 full, 11 partial. The
+only partial values observed anywhere were `1/6` and `3/6`. In the 29 logged
+training rollouts there was no partial credit at all.
+
+**Root cause.** Octave functions are all-or-nothing on these tasks. A wrong
+algorithm fails all six hidden cases; a correct one passes all six. There is
+little middle ground for a per-case fraction to express.
+
+**Why this matters more than it looks.** The WS3 design doc justifies the
+octave substrate partly on graduated reward giving "denser RL signal than
+binary boxed-match". **That premise does not hold on this environment.** The
+reward is Bernoulli in practice, so a GRPO group contributes nothing unless its
+samples disagree.
+
+That makes `group_size` the binding constraint on useful gradient. At the
+measured Level-1 pass rate at rollout temperature (p = 0.2865):
+
+| group_size | P(all samples agree) | wasted | useful rollouts per 8 |
+| ---: | ---: | ---: | ---: |
+| 2 | 0.5912 | 59.1% | 3.27 |
+| 4 | 0.2659 | 26.6% | 5.87 |
+| 8 | 0.0672 | 6.7% | 7.46 |
+
+Observed trainable fractions at `group_size = 2` were 4/8, 4/8, 2/8 — **58.3%
+wasted**, against 59.1% predicted. The model matches the measurement.
+
+**Why the wrong value was chosen.** `group_size = 2` was inherited from the
+curriculum controller's "stable envelope", but the CUDA failures that envelope
+was built around occurred at *seven to eight simultaneous long generations* —
+that is `max_inflight_rollouts`, a concurrency bound. `group_size` is samples
+per task and does not by itself raise concurrency. The original 20-step run
+used `group_size = 8` on the same hardware. The two knobs were conflated.
+
+**Fix.** Raise `group_size` (4 or 8) while holding `max_inflight_rollouts = 2`.
+This roughly doubles useful gradient per GPU-hour at no extra concurrency risk.
+Increase `batch_size` alongside it to keep several distinct tasks per step —
+`batch 16 / group 4` gives four tasks and 26% waste, against four tasks and 59%
+waste today.
+
+**Residual risk.** The pass rate p moves as the policy improves, and waste is
+minimised near p = 0.5. A curriculum that holds p in band is therefore doing
+double duty; re-check the group-size arithmetic whenever the mix changes.
+
 ## 2026-08-08 — 3-step training smoke passed; two bootstrap gaps closed
 
 **Not a defect** — the loop works. Recorded for the two environment gaps it
@@ -38,8 +176,9 @@ exposed and the one trend worth watching. Full tables in
 
 Three optimizer steps from base Qwen3.5-4B against the corrected reward, with
 candidate scoring on the pinned Octave 10.2.0 rootfs and **zero Prime Sandbox
-calls**. All eight pre-registered pass criteria met, except that the guide did
-not fire in-training (its credential path was proven separately in preflight).
+calls**. All eight pre-registered pass criteria met. (An earlier version of this entry
+said the guide never fired in-training; see the correction entry above -- it
+did, in 3 of 15 retained sequences.)
 Trainer/inference mismatch KL was **0.0003-0.0004**, against the project's
 0.015 monitoring line and the 2026-08-06 run's 0.0176. Zero rollout
 infrastructure errors. $0.92 compute.
