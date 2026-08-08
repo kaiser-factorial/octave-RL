@@ -1,0 +1,3 @@
+05:14:48 SUCCESS Step 1 |  6m 24s | Reward 0.6500 | Trainable 4/8 (50.0%) | Turns 2.0 | Branches 1.0 | Max Off-Policy 0 | Error 0.0% | Truncation 50.0%
+05:21:32 SUCCESS Step 2 |  6m 43s | Reward 0.4625 | Trainable 4/8 (50.0%) | Turns 2.2 | Branches 1.0 | Max Off-Policy 1 | Error 0.0% | Truncation 50.0%
+05:25:44 SUCCESS Step 3 |  4m 12s | Reward 0.9250 | Trainable 2/8 (25.0%) | Turns 1.5 | Branches 1.0 | Max Off-Policy 0 | Error 0.0% | Truncation 0.0%

@@ -50,9 +50,14 @@ git submodule update --init --recursive -q
 echo "prime-rl at $(git rev-parse --short HEAD)"
 
 step "prime-rl deps"
-uv sync
+# The flash-attn extra is required: the trainer imports ring_flash_attn, which
+# imports flash_attn at module load, so a plain `uv sync` fails at step 0 with
+# ModuleNotFoundError. The extra pins a prebuilt wheel, so this is fast.
+uv sync --extra flash-attn
 
 step "octave_rl environment"
+# Must come after every `uv sync`: sync prunes packages absent from the lock,
+# and this editable install is not in prime-rl's lock file.
 uv pip install -e "$OCTAVE_RL/environments/octave_rl"
 
 step "pinned Octave 10.2.0 rootfs"
@@ -82,7 +87,11 @@ fi
 du -sh "$BASE_MODEL"
 
 step "merge step-20 adapter"
-if [ ! -f "$MERGED/config.json" ]; then
+if [ ! -f "$ADAPTER/adapter_model.safetensors" ]; then
+  # Training from base needs no merged checkpoint; do not fail the bootstrap
+  # over an artifact this run was never going to use.
+  echo "no adapter at $ADAPTER -- skipping merge (training from base)"
+elif [ ! -f "$MERGED/config.json" ]; then
   uv run --project "$PRIME_RL" python "$OCTAVE_RL/scripts/merge_lora_checkpoint.py" \
     --base-model "$BASE_MODEL" --adapter "$ADAPTER" --output "$MERGED"
 else

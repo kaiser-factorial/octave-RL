@@ -92,7 +92,13 @@ ENV/
 # Local raw artifacts contain large weights, logs, rollout traces, and hidden
 # task cases. Compact aggregate JSON/CSV/PNG evidence in artifacts/ remains
 # versioned; these raw experiment trees do not.
-/artifacts/training/
+# Weights, optimizer state, rollouts and logs stay local; the compact per-run
+# summary is the versioned evidence, matching the policy for artifacts/ above.
+/artifacts/training/**
+!/artifacts/training/*/
+!/artifacts/training/*/RESULTS.md
+!/artifacts/training/*/step_summary.txt
+!/artifacts/training/*/*.sha256
 /artifacts/curriculum/live-2026-07-30/octave-staged-qwen/
 /artifacts/curriculum/live-2026-07-30/octave-real-segment-15-25-c2/
 /artifacts/curriculum/live-2026-07-30/controller/*.log

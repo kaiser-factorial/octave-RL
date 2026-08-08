@@ -30,6 +30,154 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — 3-step training smoke passed; two bootstrap gaps closed
+
+**Not a defect** — the loop works. Recorded for the two environment gaps it
+exposed and the one trend worth watching. Full tables in
+`artifacts/training/qwen-4b-3step-smoke-20260808/RESULTS.md`.
+
+Three optimizer steps from base Qwen3.5-4B against the corrected reward, with
+candidate scoring on the pinned Octave 10.2.0 rootfs and **zero Prime Sandbox
+calls**. All eight pre-registered pass criteria met, except that the guide did
+not fire in-training (its credential path was proven separately in preflight).
+Trainer/inference mismatch KL was **0.0003-0.0004**, against the project's
+0.015 monitoring line and the 2026-08-06 run's 0.0176. Zero rollout
+infrastructure errors. $0.92 compute.
+
+**Gap 1: `uv sync` alone does not install flash-attn.** The trainer imports
+`ring_flash_attn`, which imports `flash_attn` at module load, so the run died
+before step 0 with `ModuleNotFoundError`. prime-rl pins a prebuilt wheel behind
+the `flash-attn` extra; the bootstrap now uses `uv sync --extra flash-attn`.
+
+**Gap 2: any `uv sync` prunes the editable octave_rl install**, because it is
+not in prime-rl's lock file. Re-running sync to add the extra silently removed
+the environment package. The bootstrap now reinstalls it immediately after
+every sync, with the ordering commented so it is not "tidied" back.
+
+**Watch entropy on the real run.** It fell 0.7954 -> 0.4917 -> 0.3754 across
+three steps, a 53% drop. Nothing is collapsed at this length, but that slope
+sustained over 20+ steps is the most likely way a longer run ends badly. Treat
+a continued decline as a stopping condition, not a curiosity.
+
+**Do not read a trend from three steps.** Reward went 0.65 -> 0.46 -> 0.93 on
+batches of 8. That is variance. Step 3's 0.9250 is a small-sample artifact and
+must not be quoted as a capability number — the same mistake the 0.905 figure
+invited.
+
+---
+
+## 2026-08-08 — First pod run on the corrected scorer; two measurement traps
+
+**Not a defect** — the run worked. Recorded because two of its findings will
+silently corrupt future numbers if forgotten. Full tables in
+`artifacts/baseline-eval-20260808/RESULTS.md`.
+
+**Trap 1: `reasoning_effort = "none"` does not disable thinking.** Only
+`enable_thinking = false` at the renderer does. A control cell setting the
+sampling knob alone produced 87.9% truncation, mean completion exactly at the
+1024-token cap, format validity **0.12**, and `raw = 0.0938` — the model almost
+never emits a fenced function. Those are structural zeros that look exactly
+like a capability measurement. The tell is `finish_reason = "length"` plus
+`format_ok`; check both before believing any low score.
+
+**Trap 2: the G1 band must be measured at the rollout temperature.** GRPO's
+advantage comes from reward spread within a group of samples, so what matters
+is the pass rate at T=1.0, not at greedy. Base Qwen3.5-4B on Level 1 measures
+**0.7031 greedy** but **0.2865 at T=1.0** — the greedy number sits far outside
+the 10-35% target band while the sampled one sits inside it. Choosing a
+curriculum mix from the greedy figure would have driven a pointless difficulty
+increase. Do not raise sampling temperature to widen the band either: at
+T != 1.0 the sampled distribution stops matching the distribution whose
+log-probs the trainer scores, which is a systematic version of the
+trainer/inference divergence the mismatch-KL threshold exists to catch.
+
+**Incidental confirmation.** The T=1.0 / 1024-token / thinking-off cell scores
+**0.2865** against the historical July 29 calibration's **0.2817** — a
+replication, and independent evidence that the flattening defect never touched
+the calibration numbers.
+
+**Also carry forward.** Level 3 is not harder than Level 2 for this model
+(0.406 vs 0.375 base; identical solve counts for step-20), so reweighting
+toward L3 will not create headroom. And the 20-step policy shows no detectable
+single-turn gain over base at n=32 — its measurable effect is output discipline
+(format validity 1.00, zero truncation on L1/L2), not correctness.
+
+**Cost.** Pod `092edcad9f6b4f7f96d5c89beb54945e`, 2x RTX 6000 Ada, 83 minutes,
+$2.04 against a $12 ceiling. 256 rollouts, zero infrastructure errors, zero
+Prime Sandbox calls. Terminated; final inventory zero pods and zero sandboxes.
+
+---
+
+## 2026-08-08 — Executor config field shadowed a verifiers base-class field
+
+**Symptom.** Every rollout in the first pod evaluation failed instantly — 32
+rollouts "finished" in 8 seconds — with empty `rewards`/`metrics` and
+
+```text
+AttributeError: 'str' object has no attribute 'model_dump'
+  verifiers/v1/rollout.py:178 in run -> serve_user(...)
+```
+
+**Root cause.** `vf.UserConfig` already declares `runtime: RuntimeConfig =
+SubprocessConfig()`, describing where the user-simulator process runs. The new
+executor switch was also named `runtime`, so `OctaveUserConfig` replaced an
+object field with the string `"local"`, and `serve_user` called `.model_dump()`
+on it. The collision was invisible locally because no unit test constructed a
+real rollout.
+
+**Blast radius.** The first pod eval only; caught before it produced a number.
+Had the field been named this way in a training run, every rollout would have
+errored at the same point and produced a batch of structural zeros — the exact
+"infrastructure zeros are not model zeros" trap already in this repo's lessons.
+
+**Why it survived.** The local tests exercise `execute_candidate_locally` and
+config construction directly, never `serve_user`. Pydantic silently accepts a
+subclass narrowing a parent field's type, so nothing complained until the value
+was used.
+
+**Fix.** Renamed to `octave_runtime` on both `OctaveUserConfig` and
+`OctaveTaskConfig`. `test_octave_runtime_does_not_shadow_the_verifiers_user_runtime`
+now asserts the inherited `runtime` still equals `vf.UserConfig().runtime` and
+still has `model_dump`.
+
+**Residual risk.** Any future field added to these configs can collide the same
+way. Check the verifiers base class before naming one — the repo's own
+AGENTS.md rule ("go through the verifiers code as the source of truth") is the
+guard here, and it was skipped.
+
+---
+
+## 2026-08-08 — Pod bring-up: three environment frictions
+
+Recorded so the next pod costs minutes instead of a paid hour. All three are
+fixed in `scripts/pod_bootstrap.sh` and `scripts/fetch_pinned_octave.py`.
+
+1. **prime-rl submodules use `git@github.com:` URLs.** A fresh pod has no SSH
+   key, so `git submodule update --init --recursive` fails on all four and
+   aborts. Fix: `git config --global url."https://github.com/".insteadOf
+   "git@github.com:"` before cloning. A partially-aborted attempt can also
+   leave `deps/pydantic-config` empty while the other three populate, which
+   surfaces later as `does not appear to be a Python project` during `uv sync`
+   — re-run with `--force` for that submodule specifically.
+
+2. **Python's `tarfile` cannot extract the Octave image.** `filter="tar"`
+   rejects the distro's absolute symlinks (`etc/alternatives/awk` →
+   `/usr/bin/mawk`) as escaping the destination. Relaxing to `fully_trusted`
+   would take a downloaded archive's word on where its members may land, so the
+   fetch script shells out to GNU `tar` instead, matching what a container
+   runtime does.
+
+3. **`chroot` lives in `/usr/sbin`, which scrubbed PATHs omit.** The executor
+   builds a deliberately minimal child environment, and `execvpe` resolves
+   argv[0] against *that* PATH — so an unqualified `chroot` failed to exec and
+   every candidate returned empty output. `_host_tool` now resolves helper
+   binaries against the parent PATH and falls back to the sbin directories.
+   Worth noting that the "refuse rather than silently degrade" rule is what
+   made this legible: the runtime raised `LocalExecutionUnavailable` naming the
+   missing binary instead of quietly scoring zeros.
+
+---
+
 ## 2026-08-08 — Reward path scored correct matrix answers as zero
 
 **Symptom.** Reference solutions — code known to be correct, since the

@@ -10,6 +10,41 @@ their blast radius, and why each one survived earlier checks.
 
 ## Current status
 
+### 2026-08-08 three-step training smoke — passed; loop is Sandbox-free
+
+Three optimizer steps from base `Qwen/Qwen3.5-4B` against the corrected reward,
+Level 1, three attempts with the 35B guide, LoRA rank 16, lr `1e-5`, batch 8 /
+group 2 / max-inflight 2. Pod `5d52542042524de787021b492e2e6e95`, 38 minutes,
+**$0.92** compute plus **$0.0048** Prime Inference. Config
+`configs/prime-rl/octave-qwen-4b-3step-smoke.toml`; results in
+`artifacts/training/qwen-4b-3step-smoke-20260808/RESULTS.md`.
+
+| step | reward | trainable | turns | trunc | errors | loss | entropy | KL |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 0.6500 | 4/8 | 2.0 | 50.0% | 0.0% | 0.0901 | 0.7954 | 0.0004 |
+| 2 | 0.4625 | 4/8 | 2.2 | 50.0% | 0.0% | 0.0875 | 0.4917 | 0.0003 |
+| 3 | 0.9250 | 2/8 | 1.5 | 0.0% | 0.0% | -0.0037 | 0.3754 | 0.0003 |
+
+Seven of eight pre-registered criteria passed outright. Mismatch KL was two
+orders of magnitude inside the 0.015 line (the 2026-08-06 run sat at 0.0176).
+Zero rollout infrastructure errors, zero Sandbox calls, `enable_router_replay =
+false` verified in the *resolved* config, and the step-3 adapter SHA-256 checked
+remote-to-local. The eighth criterion is partial: the guide's credential path
+was proven in a preflight (isolated mode-0700 `HOME`, no `PRIME_API_KEY` in the
+environment, a real hint returned and billed) but it never fired in training,
+because turns averaged 1.5-2.2 and it only triggers when attempt 2 fails.
+
+**Two things to settle before a longer run.** Entropy fell 53% across three
+steps (0.7954 -> 0.3754); that slope sustained over 20+ steps is the most
+likely way a long run ends badly, so it needs an explicit stopping rule.
+And integrated evaluation remains unsafe on this stack, so a real run still
+needs the merge -> serve-at-concurrency-one -> ingest cycle between train-only
+chunks rather than in-loop eval.
+
+Do not read the reward column as a trend: 0.65 -> 0.46 -> 0.93 on batches of
+eight is variance, and step 3's 0.9250 is exactly the kind of small-sample
+figure that made the historical 0.905 misleading.
+
 ### 2026-08-08 corrected-scorer baseline — completed; Sandbox dependency removed
 
 **The reward path was scoring correct answers as zero on 16.7% of the task
