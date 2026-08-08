@@ -30,6 +30,105 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — Three task families are hard because of an undisclosed orientation convention, not difficulty
+
+**Symptom.** Per-family pass rates at T=1.0 (72–96 rollouts per family, both
+models, same tasks) span a **24x** range for Nemotron — far wider than the level
+ladder they are supposed to be organised by:
+
+| family | Nemotron p | Qwen p |
+|---|---:|---:|
+| linsolve_tolerance | **0.030** | **0.000** |
+| sliding_window | 0.148 | 0.014 |
+| signal_identity | 0.174 | 0.044 |
+| broadcast_arith | 0.236 | 0.014 |
+| string_parse | 0.264 | 0.032 |
+| reshape_permute | 0.306 | 0.236 |
+| reduce_along_dim | 0.351 | 0.137 |
+| sequence_recurrence | 0.417 | 0.058 |
+| struct_cell_wrangle | 0.528 | 0.375 |
+| logical_index | 0.734 | 0.398 |
+
+The level effect is 0.515 / 0.340 / 0.143 — a 3.6x range. **Family matters ~7x
+more than level.** 26 of 96 tasks are dead for *both* models across all 16
+rollouts, more than independence predicts at every level.
+
+**Root cause.** For `linsolve_tolerance`, every hidden case fails identically:
+
+```
+CASE 1 ERROR operator \: nonconformant arguments (op1 is 6x2, op2 is 1x6)
+CASE 2 ERROR operator \: nonconformant arguments (op1 is 5x3, op2 is 1x5)
+... all 6 cases, executed 0/6
+```
+
+The generator builds `b = A @ x0` as a 1-D numpy array and serialises it with
+`b.tolist()`, which arrives in Octave as a **1×m row**. `A\b` is then
+nonconformant. The reference solution handles it:
+
+```python
+ref = f"function out=linsolve_tolerance(A,b)\n b=b(:); out={expr};\nendfunction"
+```
+
+`b=b(:)` is a defensive column-coercion that **the prompt never mentions**. What
+the prompt does say is *"Preserve input orientation"* — which points the model
+away from reshaping, while `expected` is separately forced to a column by
+`out.reshape(-1, 1)`. A model that writes the natural `A\b` scores zero on every
+case, forever.
+
+Three families carry reference-side orientation coercion the prompt does not
+disclose — `linsolve_tolerance`, `reshape_permute`, `signal_identity` — and they
+are three of the four worst-performing families for both models.
+
+**Blast radius.** Every reward number this project has produced. Not wrong,
+but *measuring something other than what the level labels claim*: these families
+grade a defensive-coding convention, and for `linsolve_tolerance` they grade
+nothing at all, since 0/72 Qwen and 2/72 Nemotron rollouts pass. A constant-zero
+family contributes no GRPO advantage in any group, at any group size.
+
+It also explains the group-spread result recorded above. The U-shaped
+successes-per-group distribution and the 2.0–4.6x dispersion are not mysterious:
+the pool mixes families the models pass ~73% of the time with families they pass
+~0–3% of the time, so groups drawn from it are mostly unanimous. Dispersion is a
+symptom; family composition is the cause.
+
+**Why it survived.** `validate_reference_pool.py` checks that every reference
+solution passes its own harness — and every one does, *because the reference
+contains the coercion*. The check confirms the task is solvable; it cannot
+notice that it is solvable only via an undisclosed convention. This is the same
+shape as the 2026-08-07 flattening defect: a green check measuring something
+adjacent to the thing that mattered. The flattening bug lived on the host side
+of the same column-major/row-major seam; this one lives on the generator side.
+
+**Fix.** None yet — deliberately. This is a design decision, not a bug to patch
+quietly, and there are three defensible options:
+
+1. **Disclose it** — state the argument orientation in the prompt. Turns the
+   families into ordinary algorithm tasks and should lift them sharply.
+2. **Keep it and own it** — leave the convention undisclosed but stop calling it
+   difficulty. Then `linsolve_tolerance` is an orientation probe, and a
+   constant-zero probe should be dropped from any *training* mix while being
+   retained for evaluation.
+3. **Fix the generator** — serialise `b` with the orientation the signature
+   implies, so `A\b` works and the family grades least-squares.
+
+Option 1 or 3 for a training mix; option 2 only with the family excluded from
+sampling. What must **not** happen is choosing a curriculum mix by level while
+the family composition inside each level does most of the work.
+
+**Verification.** Per-family rates from 1,536 T=1.0 rollouts across both models
+(`artifacts/group-spread-20260808/`). Failure mode read directly from the
+`linsolve_tolerance` feedback blob. Reference-side coercion confirmed by reading
+`environments/octave_rl/generators.py` — `(:)` coercion in three families,
+`expected` forced to a column in two.
+
+**Residual risk.** `sliding_window` is the fourth weak family (0.148 / 0.014)
+and shows *no* reference-side coercion, so its difficulty has a different and
+still-unexamined cause. The remaining families have not been audited for other
+undisclosed conventions; orientation is the one that was looked for, and looking
+for one thing is how the previous two defects survived.
+
+---
+
 ## 2026-08-08 — The independence model understated wasted rollouts by up to 14x
 
 **Symptom.** The G1 pre-read written earlier today recommended a curriculum mix

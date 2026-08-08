@@ -1,6 +1,6 @@
 # Octave RL handoff
 
-Last updated: 2026-08-08
+Last updated: 2026-08-08 (evening -- hosted-evaluation session)
 
 This is the shortest trustworthy orientation for continuing the Octave RL
 work. Read `README.md` for the repository map, `REPORT.md` for the full
@@ -8,7 +8,152 @@ experiment narrative, and `CURRICULUM.md` for controller behavior and command
 details. `PIPELINE_LOG.md` records defects found in the pipeline itself,
 their blast radius, and why each one survived earlier checks.
 
+WS3 (the Nemotron routing study this substrate now serves) keeps its design doc
+and gate pre-reads at `~/Projects/Nemotron/NemoH/RL investigation - PART B/`.
+The G1 pre-read there is written against that design doc's section numbers and
+is the right entry point for "what does this mean for Nemotron".
+
+## Start here: the open decision
+
+Everything below this section is still accurate. This section exists because
+the 2026-08-08 evening measurements changed what the *next* experiment should
+be, and the change is not obvious from reading the status entries in order.
+
+**The finding.** At the training temperature, rollouts of one task are strongly
+correlated — 2.0–4.6x binomial dispersion for Nemotron, 3.0–3.2x for Qwen on the
+same tasks. Groups are therefore mostly unanimous, and a unanimous group
+contributes exactly zero GRPO advantage. At `group_size = 8` on Level 2, **50%
+of groups teach nothing**; the closed-form estimate that informed earlier
+planning said 3.6%, and was wrong by 14x because it assumed independence.
+
+**Why that happens is now known, and it is not a property of "difficulty".**
+Per-family pass rates span 0.030 to 0.734 for Nemotron — a 24x range — while the
+level ladder spans only 3.6x. Family matters roughly **7x more than level**. The
+pool mixes families the models pass ~73% of the time with families they pass
+~0–3% of the time, so groups drawn from it are mostly unanimous by construction.
+
+**And the weakest families are weak for a specific, fixable reason.**
+`linsolve_tolerance` scores 0.030 (Nemotron) and 0.000 (Qwen) over 72 rollouts
+each. Every hidden case fails identically with `nonconformant arguments (op1 is
+6x2, op2 is 1x6)`: the generator serialises `b` as a **row** vector, so the
+natural `A\\b` cannot run. The reference solution silently coerces with
+`b=b(:)`, and the prompt not only omits this but says *"Preserve input
+orientation"*, which points the other way. Three families carry undisclosed
+reference-side orientation coercion — `linsolve_tolerance`, `reshape_permute`,
+`signal_identity` — and they are three of the four worst performers for both
+models. Full write-up in `PIPELINE_LOG.md`, entry "Three task families are hard
+because of an undisclosed orientation convention".
+
+`validate_reference_pool.py` cannot catch this: it confirms each reference
+passes its own harness, which it does *because the reference contains the
+coercion*. Same shape as the flattening defect — a green check measuring
+something adjacent to the thing that mattered.
+
+### The two candidate next experiments
+
+**Option A — fix the taskset first (no GPU, hours).** The dispersion is a
+symptom; family composition is the cause. Concretely:
+
+1. Decide the orientation question per family. Three defensible answers, in
+   `PIPELINE_LOG.md`: disclose the convention in the prompt, keep it but
+   reclassify those families as orientation probes and exclude them from
+   *training* sampling, or fix the generator so `b` arrives with the orientation
+   the signature implies. Options 1 and 3 are training-appropriate; option 2 is
+   evaluation-only.
+2. Audit the remaining families for other undisclosed conventions. Orientation
+   is the one that was looked for, and looking for one thing is how the previous
+   two defects survived. `sliding_window` (0.148 / 0.014) is weak with *no*
+   reference coercion, so its cause is different and unexamined.
+3. Re-measure per-family p at T=1.0 and choose the training mix on **family**
+   composition, targeting families near p = 0.5 where groups are most
+   informative — `struct_cell_wrangle` (0.528) is closest today.
+4. Re-run `scripts/group_spread.py` and check whether dispersion falls.
+
+Cost: about 25 cents of hosted inference per re-measurement pass, no GPU. This
+is the cheaper experiment and it tests a mechanism that is already identified.
+
+**Option B — train and watch dispersion (≈$3–4, ~2h, 1 pod).** Everything above
+is measured on *base* policies. A policy under RL should decorrelate as it
+learns: a task moves from "always fails" through the middle before reaching
+"always solves". If dispersion falls materially over 20 steps, the group-size
+economics improve on their own and the taskset question is less urgent.
+
+Run the pending 20-step Qwen continuation at `group_size = 8` (not 2) on the
+L2/L3 mix, and measure dispersion at steps 0, 10 and 20 with
+`scripts/group_spread.py` against the retained rollouts. This doubles as the
+real training run that has been pending since the 3-step smoke, and as the
+durability work in "Improve durability" below.
+
+**Recommended order: A then B.** Option A is ~15x cheaper, needs no
+authorization, and tests a mechanism that has already been localised to specific
+generator lines. Option B run first would measure dispersion decay on a pool
+whose composition is about to change, so its headline number would not survive
+the taskset fix. The one argument for B first is that it is also the pending
+real-training milestone and has value independent of this question — if the $12
+ceiling is going to be spent regardless, running B on the *current* pool at
+least establishes a dispersion-decay baseline to compare against later.
+
+**What not to do.** Do not pick a curriculum mix by level alone. Level is the
+weaker of the two axes by roughly 7x, and a nominal L2/L3 mix can contain
+anything from a constant-zero family to a 73%-pass family depending on which
+tasks the seed draws.
+
+---
+
 ## Current status
+
+### 2026-08-08 hosted evaluation programme — no GPU, no Sandbox, $0.27 total
+
+Four hosted runs against Prime Inference, scored locally against the pinned
+Octave 10.2.0 rootfs. **1,824 rollouts, zero infrastructure errors, zero Sandbox
+calls, no pod.** All use seed `20260808` and the same 32 tasks per level as
+`artifacts/baseline-eval-20260808/`, so every comparison below is paired.
+
+| run | model | rollouts | cost | artifact |
+|---|---|---:|---:|---|
+| G1 pre-read | Nemotron-3-Nano-30B-A3B-BF16 | 192 | $0.021 | `artifacts/nemotron-eval-20260808/` |
+| group spread | same | 768 | $0.090 | `artifacts/group-spread-20260808/` |
+| group spread | Qwen3.5-4B | 768 | $0.133 | same |
+| hosted/pod control | Qwen3.5-4B, greedy | 96 | ~$0.015 | same |
+
+**The eval client works, and it agrees with the pod.** Every prior number came
+from a pod-local vLLM through the verifiers *train* client. These come through
+the *eval* client against a hosted provider — different rendering, transport and
+auth. Paired on identical tasks, base Qwen greedy is indistinguishable between
+the two paths at every level (McNemar p = 0.625 / 0.375 / 1.000, 4–5 discordant
+tasks of 32, completion tokens within 8%). This is what licenses using a
+2-cent pre-read to plan a pod run; it had never been checked.
+
+**Thinking-off is a different knob on each client.** On the train client only
+`[client.renderer] enable_thinking = false` works and `reasoning_effort` is
+inert. On the eval client there is no renderer to configure and
+`reasoning_effort = "none"` is the only lever. Nemotron defaults thinking **on**
+(Qwen's renderer defaults to `None`), so getting this wrong does not error — it
+returns a plausible low score. Verify from traces (zero `reasoning_content`),
+never from the config: `SamplingConfig` sets `extra = "allow"` and forwards
+typos silently.
+
+**At the training temperature Nemotron beats Qwen on every level** — +0.275,
++0.240, +0.064 (p < 0.0001, < 0.0001, 0.015), paired on group means at n=256.
+An earlier greedy n=32 comparison said the opposite on L3; Qwen's L3 collapses
+from 0.406 greedy to 0.079 sampled while Nemotron's holds. The mechanism is
+output discipline, not reasoning: at T=1.0 Qwen fails to emit a parseable
+function on **45% of L3 rollouts** against Nemotron's 2%, and greedy hides this
+completely.
+
+**Two measurement defects found and fixed.** The degenerate-group estimate was a
+closed form assuming independent rollouts and understated waste by up to 14x
+(`scripts/group_spread.py` now measures it). `summarize_baseline_eval.py`
+computed standard errors per rollout rather than per task, reporting ±0.031
+where the truth was ±0.056; no historical number is affected because every
+earlier run had one rollout per task, but it would have bitten on the first
+grouped run. Both are in `PIPELINE_LOG.md`.
+
+**The taskset finding that drives the open decision above** — per-family pass
+rates spanning 24x, three families gated on an undisclosed orientation
+convention — is recorded in `PIPELINE_LOG.md` and summarised at the top of this
+document.
+
 
 ### 2026-08-08 three-step training smoke — passed; loop is Sandbox-free
 
@@ -43,7 +188,10 @@ real constraint is that the reward is effectively binary (95.7% of 256 rollouts
 scored exactly 0 or 1), so at `group_size = 2` about **59% of rollouts produce
 no gradient at all** -- predicted 59.1%, observed 58.3%. Raise `group_size` to
 4-8 while holding `max_inflight_rollouts = 2`; those are different knobs and
-were conflated.
+were conflated. **Superseded in part:** the "59% of rollouts produce no
+gradient" figure and the implied gain from raising `group_size` both came from
+an independence assumption that the 2026-08-08 evening measurements falsified --
+the direction is right, the magnitude is not. See the open decision at the top.
 And integrated evaluation remains unsafe on this stack, so a real run still
 needs the merge -> serve-at-concurrency-one -> ingest cycle between train-only
 chunks rather than in-loop eval.
@@ -462,6 +610,11 @@ this table remain versioned.
 | Curriculum gates and commands | `CURRICULUM.md` |
 | Native run procedure | `TRAINING_RUNBOOK.md` |
 | Curriculum controller | `scripts/curriculum_controller.py` |
+| Hosted eval runner (no GPU) | `scripts/eval_hosted.py` |
+| Group-spread / dispersion measurement | `scripts/group_spread.py` |
+| Nemotron G1 pre-read | `artifacts/nemotron-eval-20260808/RESULTS.md` |
+| Group spread + hosted/pod control | `artifacts/group-spread-20260808/RESULTS.md` |
+| WS3 design doc and gate pre-reads | `~/Projects/Nemotron/NemoH/RL investigation - PART B/` |
 | LoRA merger | `scripts/merge_lora_checkpoint.py` |
 | Timing visualization source | `scripts/plot_rollout_dynamics.py` |
 | July 30 machine-readable summary | `artifacts/curriculum/live-2026-07-30/experiment-summary.json` |
@@ -745,7 +898,7 @@ disjoint from training and record its seed, policy hash, and source trace.
 
 ## Verification at handoff
 
-- Repository tests: 66 passed, 6 skipped (the skips need a local `octave`
+- Repository tests: **74 passed, 6 skipped** (the skips need a local `octave`
   binary; `unshare` is Linux-only, so scoring tests opt out of namespace
   isolation explicitly on macOS).
 - Focused Ruff checks: passed.
@@ -754,12 +907,20 @@ disjoint from training and record its seed, policy hash, and source trace.
   the pinned GNU Octave 10.2.0 (`artifacts/pinned_pool_validation.json`).
 - Baseline evaluation: 256 rollouts, zero infrastructure errors, zero Sandbox
   calls (`artifacts/baseline-eval-20260808/`).
+- Hosted evaluation: 1,824 further rollouts across four runs, zero
+  infrastructure errors, zero Sandbox calls, no GPU
+  (`artifacts/nemotron-eval-20260808/`, `artifacts/group-spread-20260808/`).
+- Hosted-vs-pod control: indistinguishable at every level on identical tasks
+  (McNemar p = 0.625 / 0.375 / 1.000).
 - Retrieved step-2 adapter checksum: verified (2026-08-06; unchanged since).
 - Qwen *training*: still not launched. The 2026-08-08 pod ran evaluation only,
   so no optimizer step has been taken against the corrected reward.
 - Active Prime pods: zero.
 - Active Prime Sandboxes: zero.
-- Baseline pod spend: $2.04 of the authorized $12.
+- Spend against the authorized $12: **$3.23** total -- $2.04 baseline pod,
+  $0.92 smoke pod, $0.27 hosted inference. No pod or Sandbox is active.
+- Wallet and authorization: recheck before any new GPU spend; the hosted
+  inference above is Prime Inference, billed separately from pod compute.
 - Raw rollout traces are gitignored: they embed every hidden case with its
   expected value **and** the reference solution (verified 2026-08-08).
 
