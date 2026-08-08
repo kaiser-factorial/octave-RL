@@ -30,6 +30,80 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — What the octave environment actually measures (and it is mostly not reasoning)
+
+**Question.** Can this substrate produce a reward for *algorithmic reasoning*,
+and does it need a judge model to do so? Answered by splitting execution from
+correctness in the retained data, then running a judge **offline** over the one
+population where reasoning is the only thing that could have failed.
+
+**Step 1: the environment already distinguished these and was discarding it.**
+The candidate transport reports an `ok` flag per case, so "threw an exception"
+and "ran and computed the wrong number" were always separable —
+`raw_case_fraction` just collapsed both to zero. `score_candidate_output` now
+also returns `executed` / `execution_fraction`, surfaced as the
+`execution_fraction` and `correct_given_executed` metrics. **The reward is
+unchanged**, so everything measured so far stays comparable.
+
+**Step 2: the tier distribution** (222 baseline rollouts, thinking-on cell
+excluded):
+
+| tier | share |
+| --- | ---: |
+| doesn't run at all | 35.6% |
+| runs, but wrong values | 12.2% |
+| runs, correct | 48.2% |
+| partially runs | 4.1% |
+
+Adding just this one tier drops group-2 gradient waste from 50.1% to 37.5% —
+about what raising `group_size` from 2 to 3 buys, and the two compose.
+
+**Step 3: a judge over the 19 rollouts that ran cleanly and got everything
+wrong.** Offline, `Qwen3.5-35B-A3B`, pre-registered categories, about $0.01:
+
+| category | n | share |
+| --- | ---: | ---: |
+| orientation_or_shape | 8 | 42.1% |
+| misread_spec | 4 | 21.1% |
+| other (all: used loops despite a vectorization requirement) | 2 | 10.5% |
+| wrong_algorithm | 2 | 10.5% |
+| indexing_or_off_by_one | 2 | 10.5% |
+| numerical_or_tolerance | 1 | 5.3% |
+
+**The finding.** Only about a quarter of "algorithmic" failures are algorithmic.
+42% are orientation/shape convention; another 32% are prompt-constraint
+compliance (misread spec, or looping where the prompt required vectorization).
+Genuine reasoning errors are 5 of 19 — roughly **3% of all rollouts**.
+
+Ranked by how much of the reward signal each competency controls, this
+environment measures:
+
+1. can the model emit runnable Octave at all (~36% of rollouts fail here);
+2. does it follow Octave's orientation/shape conventions (~5% of all rollouts);
+3. does it obey the prompt's stated constraints (~4%);
+4. is the algorithm correct (~3%).
+
+**Why this matters for WS3.** The substrate is largely an Octave-fluency and
+convention-compliance benchmark. That is a perfectly serviceable RL environment
+— the reward is deterministic, cheap, unhackable and now Sandbox-free — but a
+routing result obtained on it is a result about *learning a language's surface
+conventions*, not about mathematical reasoning. That should be stated in the
+write-up rather than discovered by a reader.
+
+**On judge-in-the-reward: recommended against, for WS3 specifically.** It would
+make the reward non-stationary and gameable inside the very quantity being
+measured; it would add run-to-run variance to the matched-competence checkpoint
+selection, which pre-registers a +/-2 point tolerance; and it would reintroduce
+the external per-rollout dependency this project just removed. It also would not
+address the dominant failure mode, since 59% of zeros never execute and a judge
+asked whether unrun code is correct is measuring its own charity. Offline
+taxonomy, as done here, has none of those problems.
+
+**Residual risk.** n=19 for the taxonomy, single judge, no human agreement
+check. Treat the category split as indicative. The direction of the result —
+that convention and compliance dominate reasoning — is large enough to survive
+considerable judge error, but the exact percentages are not load-bearing.
+
 ## 2026-08-08 — Correction: the guide DID fire; and most failures are execution errors, not wrong answers
 
 **Two corrections and one substantive finding, from decoding the retained

@@ -8,6 +8,7 @@ sys.path.insert(
     0, str(Path(__file__).parents[1] / "environments" / "octave_rl")
 )
 
+import harness as harness_module
 import octave_rl as octave_environment
 from generators import build_tasks
 from harness import (
@@ -382,3 +383,36 @@ def test_only_correctness_is_rewarded_and_retry_aware() -> None:
         state=SimpleNamespace(attempts=1),
     )
     assert asyncio.run(octave_environment.OctaveTask.case_fraction(task, trace)) == 0.0
+
+
+def test_scorer_separates_execution_from_correctness() -> None:
+    # A candidate that throws on every case and one that runs but computes the
+    # wrong numbers both score fraction 0.0. They are different failures, and
+    # in this environment the first is roughly three times more common, so the
+    # record has to tell them apart.
+    token = "trusted-token"
+    cases = [{"args": [], "expected": 1}, {"args": [], "expected": 2}]
+
+    threw = (
+        f'{candidate_result_marker(token)} '
+        '[{"ok": false, "shape": [], "values": []}, '
+        '{"ok": false, "shape": [], "values": []}]'
+    )
+    record = harness_module.score_candidate_output(
+        threw, cases=cases, tolerance=1e-9, result_token=token, exit_code=0
+    )
+    assert record["fraction"] == 0.0
+    assert record["executed"] == 0
+    assert record["execution_fraction"] == 0.0
+
+    ran_wrong = (
+        f'{candidate_result_marker(token)} '
+        '[{"ok": true, "shape": [1, 1], "values": [99]}, '
+        '{"ok": true, "shape": [1, 1], "values": [99]}]'
+    )
+    record = harness_module.score_candidate_output(
+        ran_wrong, cases=cases, tolerance=1e-9, result_token=token, exit_code=0
+    )
+    assert record["fraction"] == 0.0
+    assert record["executed"] == 2
+    assert record["execution_fraction"] == 1.0

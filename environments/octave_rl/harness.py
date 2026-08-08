@@ -317,10 +317,22 @@ def score_candidate_output(
         else 0
     )
     total = len(cases)
+    # Execution and correctness are separate competencies and the transport
+    # already distinguishes them: a case with ok=false threw inside Octave,
+    # while ok=true with wrong numbers means the code ran and the algorithm was
+    # wrong. Collapsing both into `fraction` hides which one failed, and in
+    # practice most zeros are the former.
+    executed = (
+        sum(1 for record in records if record.get("ok") is True)
+        if records is not None
+        else 0
+    )
     return {
         "passed": passed,
         "total": total,
         "fraction": passed / total if total else 0.0,
+        "executed": executed,
+        "execution_fraction": executed / total if total else 0.0,
         "structured_result": float(records is not None),
         "exit_code": exit_code,
         "feedback": output[-2000:],

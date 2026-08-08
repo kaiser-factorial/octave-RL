@@ -1,0 +1,185 @@
+{
+  "judge_model": "Qwen/Qwen3.5-35B-A3B",
+  "n": 19,
+  "counts": {
+    "orientation_or_shape": 8,
+    "misread_spec": 4,
+    "other": 2,
+    "wrong_algorithm": 2,
+    "indexing_or_off_by_one": 2,
+    "numerical_or_tolerance": 1
+  },
+  "verdicts": [
+    {
+      "cell": "base-l2",
+      "task": "octave-l2-sequence_recurrence-00006",
+      "family": "sequence_recurrence",
+      "level": 2,
+      "source": "function out = sequence_recurrence(a, b, p, q, n)\n  % SEQUENCE_RECURRENCE Generate the first n terms of a linear recurrence sequence.\n  %   out = sequence_recurrence(a, b, p, q, n) returns a column vector where\n  %   x(1) = a, x(2) = b, and x(i) = p*x(i-1) + q*x(i-2) for i > 2.\n  %   The output orientation matches the input orientation of 'a' and 'b'.\n\n  if n <= 0\n    out = [];\n    return;\n  end\n\n  % Initialize output with the first term\n  out = a;\n\n  if n == 1\n    return;\n  end\n\n  % Initialize with the second term\n  out = [out; b];\n\n  % Generate remaining terms\n  for i = 3:n\n    out(i) = p * out(i-1) + q * out(i-2);\n  end\nend",
+      "category": "orientation_or_shape",
+      "reason": "The code initializes the output as a column vector and appends terms vertically, ignoring the requirement to preserve the input orientation of 'a' and 'b'."
+    },
+    {
+      "cell": "base-l2",
+      "task": "octave-l2-sequence_recurrence-00016",
+      "family": "sequence_recurrence",
+      "level": 2,
+      "source": "function out = sequence_recurrence(a, b, p, q, n)\n  % SEQUENCE_RECURRENCE Generate the first n terms of a linear recurrence sequence.\n  %   out = sequence_recurrence(a, b, p, q, n) returns a column vector where\n  %   x(1) = a, x(2) = b, and x(i) = p*x(i-1) + q*x(i-2) for i > 2.\n  %   The output orientation matches the input orientation of 'a' and 'b'.\n\n  if n <= 0\n    out = [];\n    return;\n  end\n\n  % Initialize output with the first term\n  out = a;\n\n  if n == 1\n    return;\n  end\n\n  % Initialize with the second term\n  out = [out; b];\n\n  % Generate remaining terms\n  for i = 3:n\n    out(i) = p * out(i-1) + q * out(i-2);\n  end\nend",
+      "category": "orientation_or_shape",
+      "reason": "The function always initializes and appends to a column vector, failing to preserve the input orientation of 'a' as required by the prompt."
+    },
+    {
+      "cell": "base-l2",
+      "task": "octave-l2-string_parse-00018",
+      "family": "string_parse",
+      "level": 2,
+      "source": "function out = string_parse(s)\n  % STRING_PARSE Parse numbers separated by commas with optional surrounding spaces.\n  % Preserve input orientation.\n  \n  % Replace commas with spaces to allow flexible splitting\n  s = strrep(s, ',', ' ');\n  \n  % Split by whitespace, filtering out empty strings\n  parts = strsplit(s, ' ');\n  parts = parts(~cellfun(@isempty, parts));\n  \n  % Convert each part to a number\n  out = zeros(size(s));\n  for i = 1:length(parts)\n    if ~isempty(parts{i})\n      out(i) = str2num(parts{i});\n    end\n  end\nend",
+      "category": "orientation_or_shape",
+      "reason": "The function initializes the output array with the size of the input string instead of the number of parsed numbers, resulting in incorrect dimensions when preserving orientation."
+    },
+    {
+      "cell": "base-l2",
+      "task": "octave-l2-sliding_window-00024",
+      "family": "sliding_window",
+      "level": 2,
+      "source": "function out = sliding_window(x, w, s)\n  % SLIDING_WINDOW Return means of valid windows of width w and stride s.\n  % Preserves input orientation.\n\n  [rows, cols] = size(x);\n  out = zeros(rows, ceil(cols/w));\n\n  for i = 1:rows\n    for j = 1:ceil(cols/w)\n      start_idx = (j-1)*s + 1;\n      end_idx = min(start_idx + w - 1, cols);\n      \n      if start_idx <= end_idx\n        window = x(i, start_idx:end_idx);\n        out(i, j) = mean(window);\n      end\n    end\n  end\nend",
+      "category": "orientation_or_shape",
+      "reason": "The output size calculation incorrectly assumes a fixed number of windows based solely on the column count, failing to account for the actual number of valid windows which depends on stride s and resu"
+    },
+    {
+      "cell": "base-l2",
+      "task": "octave-l2-sequence_recurrence-00026",
+      "family": "sequence_recurrence",
+      "level": 2,
+      "source": "function out = sequence_recurrence(a, b, p, q, n)\n  % SEQUENCE_RECURRENCE Generate the first n terms of a linear recurrence sequence.\n  %   out = sequence_recurrence(a, b, p, q, n) returns a column vector where\n  %   x(1) = a, x(2) = b, and x(i) = p*x(i-1) + q*x(i-2) for i > 2.\n  %   The output orientation matches the input orientation of 'a' and 'b'.\n\n  if n <= 0\n    out = [];\n    return;\n  end\n\n  % Initialize output with the first term\n  out = a;\n\n  if n == 1\n    return;\n  end\n\n  % Initialize with the second term\n  out = [out; b];\n\n  % Generate remaining terms\n  for i = 3:n\n    out(i) = p * out(i-1) + q * out(i-2);\n  end\nend",
+      "category": "orientation_or_shape",
+      "reason": "The function always forces the output to be a column vector via concatenation, failing to preserve the input orientation as required by the specification."
+    },
+    {
+      "cell": "base-l3",
+      "task": "octave-l3-sliding_window-00004",
+      "family": "sliding_window",
+      "level": 3,
+      "source": "function out = sliding_window(x, w, s)\n  % SLIDING_WINDOW Returns valid-window medians with stride s without for/while loops.\n  % Preserves input orientation.\n  \n  [rows, cols] = size(x);\n  out = zeros(size(x));\n  \n  % Handle 1D case\n  if rows == 1\n    x_1d = x;\n    out_1d = zeros(1, cols);\n    for i = 1:cols - w + 1\n      out_1d(i) = median(x_1d(i:i+w-1));\n    end\n    out = out_1d;\n    return;\n  end\n  \n  % Process each row\n  for r = 1:rows\n    row = x(r, :);\n    out_row = zeros(1, cols);\n    for c = 1:cols - w + 1\n      out_row(c) = median(row(c:c+w-1));\n    end\n    out(r, :) = out_row;\n  end\nend",
+      "category": "misread_spec",
+      "reason": "The function incorrectly uses for/while loops despite the requirement to solve without them and fails to apply the stride parameter s correctly."
+    },
+    {
+      "cell": "base-l3",
+      "task": "octave-l3-sliding_window-00014",
+      "family": "sliding_window",
+      "level": 3,
+      "source": "function out = sliding_window(x, w, s)\n  % SLIDING_WINDOW Returns valid-window medians with stride s without for/while loops.\n  % Preserves input orientation.\n  \n  [rows, cols] = size(x);\n  out = zeros(size(x));\n  \n  % Handle 1D case\n  if rows == 1\n    x_1d = x;\n    out_1d = zeros(1, cols);\n    for i = 1:cols - w + 1\n      out_1d(i) = median(x_1d(i:i+w-1));\n    end\n    out = out_1d;\n    return;\n  end\n  \n  % Process each row\n  for r = 1:rows\n    row = x(r, :);\n    out_row = zeros(1, cols);\n    for c = 1:cols - w + 1\n      out_row(c) = median(row(c:c+w-1));\n    end\n    out(r, :) = out_row;\n  end\nend",
+      "category": "other",
+      "reason": "The function violates the prompt's requirement to avoid for/while loops by using nested for-loops in both the 1D case and row-wise processing."
+    },
+    {
+      "cell": "base-l3",
+      "task": "octave-l3-sequence_recurrence-00016",
+      "family": "sequence_recurrence",
+      "level": 3,
+      "source": "function out = sequence_recurrence(a, b, p, q, n)\n  % SEQUENCE_RECURRENCE Computes the first n terms of the linear recurrence:\n  %   x(k) = p*x(k-1) + q*x(k-2)\n  % for k >= 3, with initial terms x(1) = a and x(2) = b.\n  % Uses filter to avoid explicit loops.\n  %\n  % Inputs:\n  %   a, b  - Initial values (scalars or vectors, orientation preserved)\n  %   p, q  - Recurrence coefficients (scalars)\n  %   n     - Number of terms to generate\n  %\n  % Output:\n  %   out   - Vector of length n containing the sequence terms\n\n  if n <= 0\n    out = [];\n    return;\n  end\n\n  % Ensure inputs are column vectors if they are scalars to maintain orientation\n  if isscalar(a)\n    a = a(:);\n  end\n  if isscalar(b)\n    b = b(:);\n  end\n\n  % Create initial sequence\n  x = [a; b];\n\n  % If n is 1 or 2, return the initial part\n  if n <= 2\n    out = x(1:n);\n    return;\n  end\n\n  % Create the impulse response for the recurrence relation\n  % The recurrence is x(k) - p*x(k-1) - q*x(k-2) = 0\n  % In filter terms, we want the output to be the sequence.\n  % We can use the filter function with the denominator coefficients.\n  % The denominator is [1, -p, -q] because the equation is:\n  % y(k) = p*y(k-1) + q*y(k-2)\n  % which rearranges to y(k) - p*y(k-1) - q*y(k-2) = 0\n  % So the denominator polynomial is 1 - p*z^-1 - q*z^-2.\n  denom = [1, -p, -q];\n\n  % The numerator is [1] because we are generating the sequence from the initial conditions.\n  num = [1];\n\n  % Generate the sequence using filter.\n  % We need to generate enough terms. The filter will produce terms based on the input.\n  % We can use a vector of ones as the input to the filter, but we need to handle the initial conditions carefully.\n  % A better approach for linear recurrences with initial conditions is to use the 'init' option in newer Octave versions,\n  % or construct the input vector such that the filter produces the correct sequence.\n  %\n  % Alternative approach without 'init' option:\n  % We can use the fact that the sequence satisfies the recurrence.\n  % Let's create a vector of ones of length n.\n  % Then apply the filter. However, the filter will use the initial conditions from the input vector.\n  % We need to set the initial conditions of the filter to [a, b].\n  %\n  % In Octave, the filter function has an 'init' option.\n  % out = filter(num, denom, input, init);\n  % init should be [a, b] if the filter is of order 2.\n  %\n  % Let's try this approach.\n  input_vec = ones(n, 1);\n  init_vec = [a; b];\n\n  % Check if Octave version supports 'init' option. If not, we might need a fallback.\n  % Assuming standard Octave with support for 'init'.\n  try\n    out = filter(num, denom, input_vec, init_vec);\n  catch\n    % Fallback if 'init' is not supported\n    % We can manually compute the first two terms and then use a loop or vectorized operations.\n    % But the requirement is no for/while loops.\n    % We can use the fact that the sequence is the convolution of the impulse response with the input,\n    % but adjusted for initial conditions.\n    %\n    % Let's compute the sequence manually using vectorized operations.\n    % We know x(1) = a, x(2) = b.\n    % For k >= 3, x(k) = p*x(k-1) + q*x(k-2).\n    % We can create a vector of ones and use the recurrence relation.\n    %\n    % Let's create a vector of length n-2 for the recurrence part.\n    % x(3:n) = p*x(2:n-1) + q*x(1:n-2)\n    % This can be done using matrix multiplication.\n    %\n    % Let's try to construct the sequence using the recurrence relation directly.\n    % We can create a matrix M such that M * x(1:n-2) = x(3:n).\n    % M = [p, q; p, q; ...] (n-2 rows, 2 columns)\n    % Then x(3:n) = M * x(1:n-2).\n    %\n    % Let's implement this.\n    x = [a; b];\n    if n > 2\n      % Create the matrix M\n      m = p * ones(n-2, 1) * ones(1, 2) + q * ones(n-2, 1) * ones(1, 2);\n      % Wait, the matrix should be:\n      % [p, q]\n      % [p, q]\n      % ...\n      % So M = [p, q] repeated n-2 times.\n      m = [p, q];\n      m = repmat(m, n-2, 1);\n      % Compute the next terms\n      next_terms = m * x(1:n-2);\n      x = [x; next_terms];\n    end\n    out = x(1:n);\n  end\nend",
+      "category": "wrong_algorithm",
+      "reason": "The implementation incorrectly attempts to generate the sequence from an impulse input with initial conditions, whereas the recurrence requires propagating the specific initial values a and b through "
+    },
+    {
+      "cell": "base-l3",
+      "task": "octave-l3-sliding_window-00024",
+      "family": "sliding_window",
+      "level": 3,
+      "source": "function out = sliding_window(x, w, s)\n  % SLIDING_WINDOW Returns valid-window medians with stride s without for/while loops.\n  % Preserves input orientation.\n  \n  [rows, cols] = size(x);\n  out = zeros(size(x));\n  \n  % Handle 1D case\n  if rows == 1\n    x_1d = x;\n    out_1d = zeros(1, cols);\n    for i = 1:cols - w + 1\n      out_1d(i) = median(x_1d(i:i+w-1));\n    end\n    out = out_1d;\n    return;\n  end\n  \n  % Process each row\n  for r = 1:rows\n    row = x(r, :);\n    out_row = zeros(1, cols);\n    for c = 1:cols - w + 1\n      out_row(c) = median(row(c:c+w-1));\n    end\n    out(r, :) = out_row;\n  end\nend",
+      "category": "misread_spec",
+      "reason": "The function uses explicit for/while loops, which directly violates the requirement to solve the problem without any loops."
+    },
+    {
+      "cell": "ctlB-thinkoff-l1",
+      "task": "octave-l1-sliding_window-00004",
+      "family": "sliding_window",
+      "level": 1,
+      "source": "function out = sliding_window(x, w)\n  if w <= 0\n    error(\"Window width w must be positive\");\n  end\n  \n  out = zeros(size(x));\n  n = length(x);\n  valid_windows = (n >= w);\n  \n  if valid_windows\n    for i = 1:(n - w + 1)\n      out(i) = sum(x(i:(i + w - 1)));\n    end\n  else\n    out = [];\n  end\nend",
+      "category": "orientation_or_shape",
+      "reason": "The code flattens the output to a vector by using out(i) instead of preserving the input's matrix orientation and shape when assigning results."
+    },
+    {
+      "cell": "ctlB-thinkoff-l1",
+      "task": "octave-l1-linsolve_tolerance-00025",
+      "family": "linsolve_tolerance",
+      "level": 1,
+      "source": "function out = linsolve_tolerance(A, b)\n% LINSOLVE_TOLERANCE Solve the square linear system A*x=b with tolerance handling.\n%\n% This function solves the linear system A*x = b where A is a square matrix.\n% It uses a tolerance-based approach to handle near-singular matrices,\n% though standard Octave solvers like the ' Columns' already have internal tolerances.\n%\n% Inputs:\n%   A : Square coefficient matrix.\n%   b : Right-hand side vector (column or row, orientation preserved).\n%\n% Output:\n%   out : Solution vector x with the same orientation as the input b.\n%\n% Examples:\n%   x = linsolve_tolerance([2 3; 1 2], [1; 0]);\n%   out = linsolve_tolerance([1 2 3; 4 5 6; 7 8 9], [3; 3; 3]); % Known near-singular\n\n    # Fixed: A*.ndim == 0 check.\n    ndim = size(A);\n    if ndim < 1 || size(A,1) ~= size(A,2)\n        warning( 'linsolve_tolerance', 'A must be a square matrix.' );\n        return\n    end\n\n    # Fixed: b.ndim >= 1 check.\n    b_ndim = size(b,1);\n    if b_ndim < 1 || (b_ndim > 1 && size(b,1) ~= size(b,2))\n        error( 'linsolve_tolerance', 'b must be a vector.' );\n    end\n\n    # Ensure x is computed column-wise by default if b is a column,\n    # but preserve orientation if b is row.\n    if size(b,1) == 1 && size(b,2) > 1\n        # Input b is row; solve for column then transpose back.\n        x_temp = A \\ b';\n        out = x_temp';\n    else\n        # Standard case: solve column-wise.\n        out = A \\ b;\n    end\nend",
+      "category": "other",
+      "reason": "The function uses Python-style syntax (comments with '#' instead of '%' and invalid variable checks like 'ndim < 1') which causes runtime errors in Octave, though the prompt states it ran without erro"
+    },
+    {
+      "cell": "step20-l2",
+      "task": "octave-l2-reduce_along_dim-00000",
+      "family": "reduce_along_dim",
+      "level": 2,
+      "source": "function out = reduce_along_dim(A, k)\n  % REDUCE_ALONG_DIM Returns the k-th largest value in each column.\n  % Ties are counted separately (e.g., if a column has [5, 5, 3] and k=2,\n  % the result is 5).\n  % Input orientation is preserved.\n\n  [m, n] = size(A);\n  out = zeros(m, n);\n\n  for col = 1:n\n    col_data = A(:, col);\n    % Sort in descending order\n    sorted_col = sort(col_data, 'descend');\n    out(:, col) = sorted_col(k);\n  end\nend",
+      "category": "wrong_algorithm",
+      "reason": "The function incorrectly returns an m\u00d7n matrix of repeated k-th values per column instead of extracting only the single k-th largest scalar value from each column."
+    },
+    {
+      "cell": "step20-l2",
+      "task": "octave-l2-reduce_along_dim-00010",
+      "family": "reduce_along_dim",
+      "level": 2,
+      "source": "function out = reduce_along_dim(A, k)\n  % REDUCE_ALONG_DIM Returns the k-th largest value in each column.\n  % Ties are counted separately (e.g., if a column has [5, 5, 3] and k=2,\n  % the result is 5).\n  % Input orientation is preserved.\n\n  [m, n] = size(A);\n  out = zeros(m, n);\n\n  for col = 1:n\n    col_data = A(:, col);\n    % Sort in descending order\n    sorted_col = sort(col_data, 'descend');\n    out(:, col) = sorted_col(k);\n  end\nend",
+      "category": "misread_spec",
+      "reason": "The function iterates over every row to output a value for each position, but the specification requires returning exactly one k-th largest value per column."
+    },
+    {
+      "cell": "step20-l2",
+      "task": "octave-l2-reduce_along_dim-00020",
+      "family": "reduce_along_dim",
+      "level": 2,
+      "source": "function out = reduce_along_dim(A, k)\n  % REDUCE_ALONG_DIM Returns the k-th largest value in each column.\n  % Ties are counted separately (e.g., if a column has [5, 5, 3] and k=2,\n  % the result is 5).\n  % Input orientation is preserved.\n\n  [m, n] = size(A);\n  out = zeros(m, n);\n\n  for col = 1:n\n    col_data = A(:, col);\n    % Sort in descending order\n    sorted_col = sort(col_data, 'descend');\n    out(:, col) = sorted_col(k);\n  end\nend",
+      "category": "indexing_or_off_by_one",
+      "reason": "The function attempts to assign a scalar k-th element directly into the entire column, which is invalid and would either error or behave incorrectly depending on language rules, failing to extract jus"
+    },
+    {
+      "cell": "step20-l2",
+      "task": "octave-l2-sliding_window-00024",
+      "family": "sliding_window",
+      "level": 2,
+      "source": "function out = sliding_window(x, w, s)\n  % SLIDING_WINDOW Return means of valid windows of width w and stride s.\n  % Preserves input orientation.\n\n  [rows, cols] = size(x);\n  out = zeros(rows, ceil(cols/w));\n\n  for i = 1:rows\n    for j = 1:ceil(cols/w)\n      start_idx = (j-1)*s + 1;\n      end_idx = min(start_idx + w - 1, cols);\n      \n      if start_idx <= end_idx\n        window = x(i, start_idx:end_idx);\n        out(i, j) = mean(window);\n      end\n    end\n  end\nend",
+      "category": "indexing_or_off_by_one",
+      "reason": "The output array dimensions are calculated based on the full column width divided by stride, but valid windows are only produced when the window fits entirely within the column bounds, causing a misma"
+    },
+    {
+      "cell": "step20-l2",
+      "task": "octave-l2-reduce_along_dim-00030",
+      "family": "reduce_along_dim",
+      "level": 2,
+      "source": "function out = reduce_along_dim(A, k)\n  % REDUCE_ALONG_DIM Returns the k-th largest value in each column.\n  % Ties are counted separately (e.g., if a column has [5, 5, 3] and k=2,\n  % the result is 5).\n  % Input orientation is preserved.\n\n  [m, n] = size(A);\n  out = zeros(m, n);\n\n  for col = 1:n\n    col_data = A(:, col);\n    % Sort in descending order\n    sorted_col = sort(col_data, 'descend');\n    out(:, col) = sorted_col(k);\n  end\nend",
+      "category": "misread_spec",
+      "reason": "The function returns a single k-th largest value for each column but the task requires returning the k-th largest value in each row of the output based on the input orientation preservation logic, or "
+    },
+    {
+      "cell": "step20-l3",
+      "task": "octave-l3-signal_identity-00009",
+      "family": "signal_identity",
+      "level": 3,
+      "source": "function out = signal_identity(x)\n  % SIGNAL_IDENTITY FFT-based real circular autocorrelation without for/while loops.\n  % Preserves input orientation.\n  \n  % Compute the FFT of the input signal\n  X = fft(x);\n  \n  % Compute the squared magnitude of the FFT\n  Pxx = abs(X).^2;\n  \n  % Compute the inverse FFT to get the autocorrelation\n  out = ifft(Pxx);\n  \n  % Ensure the output is real (due to numerical precision)\n  out = imag(out);\nend",
+      "category": "numerical_or_tolerance",
+      "reason": "The code incorrectly extracts the imaginary part of the autocorrelation result instead of the real part, which is mathematically incorrect and due to floating-point precision."
+    },
+    {
+      "cell": "step20-l3",
+      "task": "octave-l3-signal_identity-00019",
+      "family": "signal_identity",
+      "level": 3,
+      "source": "function out = signal_identity(x)\n  % SIGNAL_IDENTITY FFT-based real circular autocorrelation without for/while loops.\n  % Preserves input orientation.\n  \n  % Compute the FFT of the input signal\n  X = fft(x);\n  \n  % Compute the squared magnitude of the FFT\n  Pxx = abs(X).^2;\n  \n  % Compute the inverse FFT to get the autocorrelation\n  out = ifft(Pxx);\n  \n  % Ensure the output is real (due to numerical precision)\n  out = imag(out);\nend",
+      "category": "orientation_or_shape",
+      "reason": "The function incorrectly extracts only the imaginary part of the autocorrelation result, which causes the loss of the real-valued output that should be returned."
+    },
+    {
+      "cell": "step20-l3",
+      "task": "octave-l3-signal_identity-00029",
+      "family": "signal_identity",
+      "level": 3,
+      "source": "function out = signal_identity(x)\n  % SIGNAL_IDENTITY FFT-based real circular autocorrelation without for/while loops.\n  % Preserves input orientation.\n  \n  % Compute the FFT of the input signal\n  X = fft(x);\n  \n  % Compute the squared magnitude of the FFT\n  Pxx = abs(X).^2;\n  \n  % Compute the inverse FFT to get the autocorrelation\n  out = ifft(Pxx);\n  \n  % Ensure the output is real (due to numerical precision)\n  out = imag(out);\nend",
+      "category": "orientation_or_shape",
+      "reason": "The code incorrectly extracts only the imaginary part of the result instead of the real part, which should be returned as the autocorrelation is real-valued."
+    }
+  ]
+}

@@ -378,6 +378,30 @@ class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
         return float(trace.info["octave"]["fraction"])
 
     @vf.metric
+    async def execution_fraction(self, trace: vf.Trace) -> float:
+        """Share of hidden cases whose candidate call ran without throwing.
+
+        Read together with ``correct_given_executed``: this one says whether the
+        model wrote runnable Octave at all, which is a different competency from
+        writing *correct* Octave and is the one that fails far more often.
+        """
+        return float(trace.info["octave"].get("execution_fraction", 0.0))
+
+    @vf.metric
+    async def correct_given_executed(self, trace: vf.Trace) -> float:
+        """Correct fraction among the cases that actually ran.
+
+        This is the closest thing the environment has to an algorithmic-accuracy
+        signal, because it stops charging the model for code that never
+        executed. It is 0.0 when nothing ran, so it is only interpretable
+        alongside ``execution_fraction`` -- a rollout at (0.0, 0.0) failed to
+        run, while (1.0, 0.0) ran cleanly and got every answer wrong.
+        """
+        record = trace.info["octave"]
+        executed = record.get("executed", 0)
+        return float(record["passed"] / executed) if executed else 0.0
+
+    @vf.metric
     async def attempts_used(self, trace: vf.Trace) -> float:
         return float(max(1, trace.state.attempts))
 
