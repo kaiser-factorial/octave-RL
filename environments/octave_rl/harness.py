@@ -284,6 +284,59 @@ def candidate_record_matches(
     return True
 
 
+def _octave_rowmajor(value: Any) -> list[Any]:
+    """Flatten row by row -- what ``A'(:)`` reports for a transposed answer."""
+    if (
+        isinstance(value, list)
+        and value
+        and all(isinstance(row, list) for row in value)
+        and len({len(row) for row in value}) == 1
+    ):
+        return [item for row in value for item in row]
+    return _flatten(value)
+
+
+def candidate_record_is_transpose(
+    record: dict[str, Any],
+    *,
+    expected: Any,
+    tolerance: float,
+) -> bool:
+    """True when the answer is exactly the transpose of the expected value.
+
+    Worth detecting separately because it is the one failure where the model got
+    the whole computation right and only the orientation convention wrong. These
+    currently score identically to code that does not parse, which throws away
+    the most informative near-miss the environment can produce.
+
+    A transposed result reports ``shape`` reversed, and because Octave flattens
+    ``actual(:)`` column by column, its reported values equal the *row-major*
+    flatten of the expected value.
+    """
+    if record.get("ok") is not True:
+        return False
+    expected_shape = _octave_shape(expected)
+    if not expected_shape:
+        return False
+    try:
+        actual_shape = [int(item) for item in record["shape"]]
+        actual_values = [_as_float(item) for item in _flatten(record["values"])]
+        expected_values = [_as_float(item) for item in _octave_rowmajor(expected)]
+    except (KeyError, TypeError, ValueError):
+        return False
+    if actual_shape != [expected_shape[1], expected_shape[0]]:
+        return False
+    if len(actual_values) != len(expected_values):
+        return False
+    for actual, target in zip(actual_values, expected_values, strict=True):
+        if math.isnan(target):
+            if not math.isnan(actual):
+                return False
+        elif not math.isfinite(actual) or abs(actual - target) > tolerance * max(1.0, abs(target)):
+            return False
+    return True
+
+
 def score_candidate_output(
     output: str,
     *,
@@ -327,12 +380,27 @@ def score_candidate_output(
         if records is not None
         else 0
     )
+    transposed = (
+        sum(
+            not candidate_record_matches(
+                record, expected=case["expected"], tolerance=tolerance
+            )
+            and candidate_record_is_transpose(
+                record, expected=case["expected"], tolerance=tolerance
+            )
+            for record, case in zip(records, cases, strict=True)
+        )
+        if records is not None
+        else 0
+    )
     return {
         "passed": passed,
         "total": total,
         "fraction": passed / total if total else 0.0,
         "executed": executed,
         "execution_fraction": executed / total if total else 0.0,
+        "transposed": transposed,
+        "transposed_fraction": transposed / total if total else 0.0,
         "structured_result": float(records is not None),
         "exit_code": exit_code,
         "feedback": output[-2000:],

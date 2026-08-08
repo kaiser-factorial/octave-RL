@@ -30,6 +30,55 @@ entry is worth having.
 
 ---
 
+## 2026-08-08 — Orientation failures are literally transposes, and the judge over-counted them
+
+**Question.** Is "orientation mismatch" a real, mechanically detectable
+relation — and should it earn partial credit?
+
+**It is exactly detectable, with no judge.** If a candidate returns the
+transpose of the expected value, then because Octave flattens `actual(:)`
+column by column, its reported values equal the **row-major** flatten of the
+expected value, and its reported `shape` is reversed. That is a two-line test
+against data the transport already sends.
+
+**Result over the 19 rollouts that ran cleanly and got every answer wrong:**
+
+| relation to expected | rollouts |
+| --- | ---: |
+| exact transpose on **every** case | 4 |
+| genuinely different values | 15 |
+
+No rollout was a reshape or permutation of the right values; it is transpose or
+nothing.
+
+**The judge over-counted by 2x.** It labelled 8 of 19 `orientation_or_shape`;
+mechanically only 4 are transposes. The judge was reading the *code* ("initializes
+the output as a column vector") rather than checking the *numbers*, and
+inferring orientation from intent. This is a concrete instance of why the judge
+stays out of the reward: on the one sub-question where a deterministic check
+exists, the judge was wrong by a factor of two in the direction of its own
+narrative.
+
+**Detection added as a metric, not as reward.** `transposed_fraction` is now
+reported per rollout, counted only for cases that did not already pass, so a
+symmetric answer equal to its own transpose scores as correct rather than both.
+**The reward is unchanged and a transposed answer still scores zero**, because
+the prompts explicitly require preserving input orientation — it is a stated
+part of the task, not an incidental convention.
+
+**On rewarding it anyway.** Defensible, and cheap to add as a configurable
+credit, but it is a real trade: partial credit for a transpose weakens a
+requirement the prompt makes explicit, and the gradient it buys is small — 4 of
+222 rollouts, about 1.8%. The stronger reason to keep it as a metric is that it
+answers a *WS3* question rather than a training one. Arms can now be compared on
+which competency each improved: whether the model learned to emit runnable
+Octave (`execution_fraction`), learned the orientation convention
+(`transposed_fraction`), or learned the algorithm (`correct_given_executed`).
+SFT on reference solutions gets the convention for free from gold code; RL has
+to discover it. If those arms differ in *which* of these they fix, that is a
+more interesting routing readout than a single scalar reward — and it is now
+measurable without changing the reward that makes the arms comparable.
+
 ## 2026-08-08 — What the octave environment actually measures (and it is mostly not reasoning)
 
 **Question.** Can this substrate produce a reward for *algorithmic reasoning*,

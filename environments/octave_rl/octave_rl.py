@@ -402,6 +402,18 @@ class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
         return float(record["passed"] / executed) if executed else 0.0
 
     @vf.metric
+    async def transposed_fraction(self, trace: vf.Trace) -> float:
+        """Share of cases answered with exactly the transpose of the expected value.
+
+        This is the model getting the computation right and the orientation
+        convention wrong. Reported separately because the prompts explicitly
+        require preserving input orientation, so it is a real failure -- but it
+        is a categorically different failure from a wrong algorithm, and
+        collapsing the two hides which competency an arm actually improved.
+        """
+        return float(trace.info["octave"].get("transposed_fraction", 0.0))
+
+    @vf.metric
     async def attempts_used(self, trace: vf.Trace) -> float:
         return float(max(1, trace.state.attempts))
 

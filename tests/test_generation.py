@@ -416,3 +416,40 @@ def test_scorer_separates_execution_from_correctness() -> None:
     assert record["fraction"] == 0.0
     assert record["executed"] == 2
     assert record["execution_fraction"] == 1.0
+
+
+def test_transpose_is_detected_but_not_rewarded() -> None:
+    # The prompts require preserving input orientation, so a transposed answer
+    # is a real failure and must still score zero. It is worth *naming*, though:
+    # the model got the whole computation right and only the convention wrong,
+    # which is a different thing from a wrong algorithm.
+    token = "trusted-token"
+    expected = [[1, 2, 3], [4, 5, 6]]
+    transposed = (
+        f'{candidate_result_marker(token)} '
+        '[{"ok": true, "shape": [3, 2], "values": [1, 2, 3, 4, 5, 6]}]'
+    )
+    record = harness_module.score_candidate_output(
+        transposed,
+        cases=[{"expected": expected}],
+        tolerance=1e-9,
+        result_token=token,
+        exit_code=0,
+    )
+    assert record["fraction"] == 0.0, "orientation is part of the spec"
+    assert record["transposed_fraction"] == 1.0
+    assert record["execution_fraction"] == 1.0
+
+    correct = (
+        f'{candidate_result_marker(token)} '
+        '[{"ok": true, "shape": [2, 3], "values": [1, 4, 2, 5, 3, 6]}]'
+    )
+    record = harness_module.score_candidate_output(
+        correct,
+        cases=[{"expected": expected}],
+        tolerance=1e-9,
+        result_token=token,
+        exit_code=0,
+    )
+    assert record["fraction"] == 1.0
+    assert record["transposed_fraction"] == 0.0, "a correct answer is not a transpose"
