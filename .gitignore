@@ -108,3 +108,12 @@ ENV/
 # committed. The compact aggregates beside them are safe and are kept.
 /artifacts/baseline-eval-*/**/traces.jsonl
 /artifacts/baseline-eval-*/**/*.log
+
+# The same holds for any other eval tree (hosted-model runs, calibration
+# passes) and for archives of one -- a tarball of an outputs/ dir carries the
+# traces inside it, where the rule above cannot see them.
+/artifacts/*-eval-*/**/traces.jsonl
+/artifacts/*-eval-*/**/*.log
+/artifacts/**/*.tgz
+/artifacts/**/*.tar.gz
+/artifacts/**/*.zip
