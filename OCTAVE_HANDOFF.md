@@ -130,24 +130,40 @@ Both host-side validators pass 9,000/9,000 on the pinned interpreter with real
 
 ### The next experiment
 
-**A 3-step smoke has now run against the repaired taskset with the family
-split** (`artifacts/training/qwen-4b-3step-splits-20260809/`, 39 minutes,
-~$0.98). The loop works end to end and the holdout held — verified by mapping
-the environment log's task indices back through `build_tasks`, since the
-retained rollout blobs are tokenized and grep finds nothing either way.
+**The user-server error is solved.** It was the guide credential:
+`PRIME_API_KEY` is not inherited by the user-simulator subprocess, so
+`_prime_api_key()` raised, the exception escaped `respond`, and the MCP layer
+reported it as an opaque `JSONDecodeError`. Discriminating experiment: three
+turns *without* the guide is clean, three turns *with* it fails. A guide
+failure now degrades to an unguided retry and records the reason; put the
+credential in `~/.prime/config.json`, not just the environment. Verified at 0
+errors across 384 rollouts in the configuration that used to fail. Full entry in
+`PIPELINE_LOG.md`.
 
-It also changed the plan in two ways:
+**Model size is now an open choice, and 4B may be the wrong one.** 4B was
+picked as the smallest Qwen with nonzero reward on a taskset where whole
+families were unsolvable regardless of model. Measured on the repaired taskset
+in the actual training configuration (Level 1, three attempts, guide, 256
+rollouts each; `artifacts/smaller-models-20260809/`):
 
-1. **Do not start on Level 1.** It is now saturated: reward 0.9250 at all three
-   steps with the trainable fraction collapsing 80% -> 20% -> 16.7%. A
-   unanimous-at-1.0 group is exactly as gradient-free as a unanimous-at-0 one.
-   Start on an L2/L3 mix — post-repair Qwen sits at 0.214 (L2) and 0.118 (L3)
-   at T=1.0 single-turn, against the 10-35% band the platform recommends.
-2. **Diagnose the user-server error first.** 20-33% of rollouts hit an empty
-   response from the user MCP server, only on retry turns. The runbook's abort
-   threshold is 5%. Most rollouts recover, but the losses concentrate on
-   multi-turn rollouts, i.e. the harder tasks, so the damage is not uniform
-   across the reward distribution.
+| model | reward | execution | format_ok | training cost |
+|---|---:|---:|---:|---|
+| Qwen3.5-0.8B | 0.107 | 0.171 | 0.64 | 1/5 of 4B |
+| Qwen3.5-2B | **0.128** | 0.243 | 0.59 | 1/2 of 4B |
+| Qwen3.5-4B | 0.641 | 0.816 | 0.92 | — |
+
+Both smaller models sit inside the 10-35% starting band on Level 1, where 4B no
+longer does. **Recommended: Qwen3.5-2B on Level 1**, or stay on 4B and move to
+an L2/L3 mix. What limits the small models is formatting and basic fluency
+(`format_ok` near 0.6), not algorithm choice — which is the competency this
+environment teaches best, but also means a large share of the gradient would go
+to fence discipline. One 3-step smoke on 2B (~$1) would settle whether that
+headroom is reachable.
+
+*Correction to the 3-step smoke:* it reported 0.9250 for 4B on Level 1; at
+n=256 the same cell is **0.641**. The smoke's batches were 8-12 rollouts. Level
+1 is still too easy for 4B; the magnitude was small-sample optimism, exactly as
+that write-up warned.
 
 Then Option B on the repaired pool: the 20-step Qwen continuation at
 `group_size = 8` on the L2/L3 mix, with dispersion measured at steps 0, 10 and
