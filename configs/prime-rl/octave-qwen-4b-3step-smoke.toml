@@ -56,10 +56,14 @@ enable_thinking = false
 temperature = 1.0
 max_completion_tokens = 1536
 
+# TRAIN SPLIT. `families` excludes reduce_along_dim and reshape_permute, which are
+# the generalization holdout -- see README "Train, validation, and test splits".
+# If this list is edited, edit configs/eval/octave-split-*.toml to match, or the
+# holdout stops being held out and the generalization number becomes meaningless.
 [[orchestrator.train.env]]
 name = "octave-level1-guided-local"
 group_size = 2
-taskset = { id = "octave-rl", level = 1, num_tasks = 500, seed = 314159, task = { octave_runtime = "local", second_attempt_multiplier = 0.85, guided_attempt_multiplier = 0.60, user = { colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B", octave_runtime = "local" } } }
+taskset = { id = "octave-rl", families = ["logical_index", "broadcast_arith", "sliding_window", "linsolve_tolerance", "sequence_recurrence", "struct_cell_wrangle", "string_parse", "signal_identity"], level = 1, num_tasks = 500, seed = 314159, task = { octave_runtime = "local", second_attempt_multiplier = 0.85, guided_attempt_multiplier = 0.60, user = { colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B", octave_runtime = "local" } } }
 harness = { id = "null", runtime = { type = "subprocess" } }
 max_turns = 3
 max_total_tokens = 6144

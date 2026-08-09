@@ -222,6 +222,68 @@ The container is the isolation boundary here, which is why
 Emulation costs roughly 4x: budget about 90 minutes for a full 1,500-task
 reference pass.
 
+## Train, validation, and test splits
+
+A pool's prompt is determined by `(family, level)` and carries nothing
+task-specific, so a 1,500-task pool contains about **30 distinct prompts** and
+two pools drawn with different seeds share every one of them. A seed holds out
+the hidden test *inputs*, not the question. RL here can therefore drive toward
+memorising 30 function bodies, and a seed-disjoint evaluation cannot detect it.
+
+Excluding a **family** is what produces a held-out problem. The `families`
+taskset field does that (`None` selects all ten):
+
+```python
+from generators import DEFAULT_HELDOUT_FAMILIES, training_families
+
+training_families()        # the 8 trained families
+DEFAULT_HELDOUT_FAMILIES   # ['reduce_along_dim', 'reshape_permute']
+```
+
+Use three splits:
+
+| split | families | seed | used for | config |
+| --- | --- | --- | --- | --- |
+| **train** | the 8 | training | rollouts and gradient | `configs/prime-rl/*.toml` |
+| **validation** | **the same 8** | held-out | level promotion, checkpoint selection | `configs/eval/octave-split-validation.toml` |
+| **test** | **the 2 held out** | held-out | generalization; read rarely, ideally once | `configs/eval/octave-split-generalization.toml` |
+
+```bash
+uv run eval @ configs/eval/octave-split-validation.toml       # gates promotion
+uv run eval @ configs/eval/octave-split-generalization.toml   # the honest read
+```
+
+Two rules, both learned here the hard way:
+
+- **Report the splits as separate numbers, never as one weighted score.**
+  Averaging across families is exactly what concealed `linsolve_tolerance` at
+  0.030 and `struct_cell_wrangle` level 3 at 0.000 for weeks. Weighting the
+  held-out families "more heavily" inside one number rebuilds that blindness.
+- **Never gate level promotion or select checkpoints on the held-out
+  families.** That is selection leakage — tuning against the thing you claim is
+  untouched. Every decision uses validation; test is read at the end.
+
+Measure the held-out families **before** training too. Base rates run from 0.21
+to 0.75 across families, so an absolute post-training number is
+uninterpretable; only the change from base on the same config means anything.
+
+### Why these two families
+
+`reduce_along_dim` and `reshape_permute` both sit mid-difficulty for both
+measured models (0.389/0.326 and 0.569/0.292 at T=1.0), so neither is floored
+nor ceilinged. `reduce_along_dim` has a near neighbour that stays in training —
+`struct_cell_wrangle` level 2+ is also a column-wise reduction — so it measures
+transfer of a *practiced* idiom; `reshape_permute` has none, so it measures
+whether general Octave fluency reaches an unpracticed one. It is a default, not
+a recommendation: hold out the two hardest families and a real improvement
+hides against the floor.
+
+Filtering *selects from* the full ten-family stream rather than cycling over the
+selection, so a family's k-th task is byte-identical whichever others are
+present. Splits are disjoint **and** each stays comparable to a full-pool
+measurement. Task ids come from the full stream, so they are stable but not
+contiguous within a filtered pool.
+
 ## Train with prime-rl
 
 The completed experiment used open-source `prime-rl` commit
