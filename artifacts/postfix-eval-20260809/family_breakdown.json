@@ -1,0 +1,149 @@
+{
+  "root": "/private/tmp/claude-501/-Users-corinakaiser-Projects-repo-teacher-lecture-X-prime-intellect-octave-RL/0b766c6e-399d-4b23-9e2c-e99102dbf227/scratchpad/post/out2",
+  "runs": {
+    "nemo-g8": {
+      "reduce_along_dim": {
+        "n": 96,
+        "reward": 0.3888888888888889,
+        "exec": 0.6215277777777778,
+        "correct_given_executed": 0.3923611111111111,
+        "transposed": 0.03125
+      },
+      "logical_index": {
+        "n": 96,
+        "reward": 0.638888888888889,
+        "exec": 0.8333333333333334,
+        "correct_given_executed": 0.638888888888889,
+        "transposed": 0.020833333333333332
+      },
+      "broadcast_arith": {
+        "n": 72,
+        "reward": 0.4583333333333333,
+        "exec": 0.5185185185185186,
+        "correct_given_executed": 0.4583333333333333,
+        "transposed": 0.013888888888888888
+      },
+      "reshape_permute": {
+        "n": 72,
+        "reward": 0.5694444444444444,
+        "exec": 0.6944444444444444,
+        "correct_given_executed": 0.5694444444444444,
+        "transposed": 0.027777777777777776
+      },
+      "sliding_window": {
+        "n": 72,
+        "reward": 0.21296296296296297,
+        "exec": 0.33796296296296297,
+        "correct_given_executed": 0.2314814814814815,
+        "transposed": 0.0
+      },
+      "sequence_recurrence": {
+        "n": 72,
+        "reward": 0.5740740740740741,
+        "exec": 0.6666666666666666,
+        "correct_given_executed": 0.5740740740740741,
+        "transposed": 0.0
+      },
+      "linsolve_tolerance": {
+        "n": 72,
+        "reward": 0.7523148148148148,
+        "exec": 0.7777777777777778,
+        "correct_given_executed": 0.7523148148148148,
+        "transposed": 0.0
+      },
+      "struct_cell_wrangle": {
+        "n": 72,
+        "reward": 0.7361111111111112,
+        "exec": 0.7916666666666666,
+        "correct_given_executed": 0.7361111111111112,
+        "transposed": 0.041666666666666664
+      },
+      "string_parse": {
+        "n": 72,
+        "reward": 0.3657407407407407,
+        "exec": 0.4722222222222222,
+        "correct_given_executed": 0.3657407407407407,
+        "transposed": 0.027777777777777776
+      },
+      "signal_identity": {
+        "n": 72,
+        "reward": 0.23379629629629628,
+        "exec": 0.6064814814814814,
+        "correct_given_executed": 0.23379629629629628,
+        "transposed": 0.016203703703703706
+      }
+    },
+    "qwen-g8": {
+      "logical_index": {
+        "n": 96,
+        "reward": 0.3125,
+        "exec": 0.53125,
+        "correct_given_executed": 0.3125,
+        "transposed": 0.08333333333333333
+      },
+      "reduce_along_dim": {
+        "n": 96,
+        "reward": 0.3263888888888889,
+        "exec": 0.4427083333333333,
+        "correct_given_executed": 0.3350694444444444,
+        "transposed": 0.020833333333333332
+      },
+      "broadcast_arith": {
+        "n": 72,
+        "reward": 0.08333333333333333,
+        "exec": 0.2152777777777778,
+        "correct_given_executed": 0.08333333333333333,
+        "transposed": 0.041666666666666664
+      },
+      "reshape_permute": {
+        "n": 72,
+        "reward": 0.2916666666666667,
+        "exec": 0.3819444444444444,
+        "correct_given_executed": 0.2916666666666667,
+        "transposed": 0.041666666666666664
+      },
+      "sliding_window": {
+        "n": 72,
+        "reward": 0.1898148148148148,
+        "exec": 0.3171296296296296,
+        "correct_given_executed": 0.19722222222222222,
+        "transposed": 0.0
+      },
+      "linsolve_tolerance": {
+        "n": 72,
+        "reward": 0.2916666666666667,
+        "exec": 0.375,
+        "correct_given_executed": 0.2916666666666667,
+        "transposed": 0.041666666666666664
+      },
+      "sequence_recurrence": {
+        "n": 72,
+        "reward": 0.3657407407407407,
+        "exec": 0.4305555555555556,
+        "correct_given_executed": 0.3657407407407407,
+        "transposed": 0.013888888888888888
+      },
+      "struct_cell_wrangle": {
+        "n": 72,
+        "reward": 0.3888888888888889,
+        "exec": 0.6388888888888888,
+        "correct_given_executed": 0.3888888888888889,
+        "transposed": 0.05555555555555555
+      },
+      "string_parse": {
+        "n": 72,
+        "reward": 0.05555555555555555,
+        "exec": 0.125,
+        "correct_given_executed": 0.05555555555555555,
+        "transposed": 0.027777777777777776
+      },
+      "signal_identity": {
+        "n": 72,
+        "reward": 0.08564814814814815,
+        "exec": 0.2708333333333333,
+        "correct_given_executed": 0.09884259259259259,
+        "transposed": 0.03009259259259259
+      }
+    }
+  }
+}

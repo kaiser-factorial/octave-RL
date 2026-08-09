@@ -1,0 +1,155 @@
+{
+  "octave": "GNU Octave, version 10.2.0",
+  "interpreter": "/usr/local/bin/octave-cli",
+  "rootfs": null,
+  "network_isolated": false,
+  "isolation_prefix": null,
+  "filesystem_isolated": false,
+  "seed": 314159,
+  "num_tasks_per_level": 500,
+  "levels": [
+    {
+      "level": 1,
+      "tasks": 500,
+      "families": {
+        "reduce_along_dim": {
+          "passed": 300,
+          "total": 300
+        },
+        "logical_index": {
+          "passed": 300,
+          "total": 300
+        },
+        "reshape_permute": {
+          "passed": 300,
+          "total": 300
+        },
+        "broadcast_arith": {
+          "passed": 300,
+          "total": 300
+        },
+        "sliding_window": {
+          "passed": 300,
+          "total": 300
+        },
+        "linsolve_tolerance": {
+          "passed": 300,
+          "total": 300
+        },
+        "sequence_recurrence": {
+          "passed": 300,
+          "total": 300
+        },
+        "struct_cell_wrangle": {
+          "passed": 300,
+          "total": 300
+        },
+        "string_parse": {
+          "passed": 300,
+          "total": 300
+        },
+        "signal_identity": {
+          "passed": 300,
+          "total": 300
+        }
+      },
+      "failures": []
+    },
+    {
+      "level": 2,
+      "tasks": 500,
+      "families": {
+        "reduce_along_dim": {
+          "passed": 300,
+          "total": 300
+        },
+        "logical_index": {
+          "passed": 300,
+          "total": 300
+        },
+        "reshape_permute": {
+          "passed": 300,
+          "total": 300
+        },
+        "broadcast_arith": {
+          "passed": 300,
+          "total": 300
+        },
+        "sliding_window": {
+          "passed": 300,
+          "total": 300
+        },
+        "linsolve_tolerance": {
+          "passed": 300,
+          "total": 300
+        },
+        "sequence_recurrence": {
+          "passed": 300,
+          "total": 300
+        },
+        "struct_cell_wrangle": {
+          "passed": 300,
+          "total": 300
+        },
+        "string_parse": {
+          "passed": 300,
+          "total": 300
+        },
+        "signal_identity": {
+          "passed": 300,
+          "total": 300
+        }
+      },
+      "failures": []
+    },
+    {
+      "level": 3,
+      "tasks": 500,
+      "families": {
+        "reduce_along_dim": {
+          "passed": 300,
+          "total": 300
+        },
+        "logical_index": {
+          "passed": 300,
+          "total": 300
+        },
+        "reshape_permute": {
+          "passed": 300,
+          "total": 300
+        },
+        "broadcast_arith": {
+          "passed": 300,
+          "total": 300
+        },
+        "sliding_window": {
+          "passed": 300,
+          "total": 300
+        },
+        "linsolve_tolerance": {
+          "passed": 300,
+          "total": 300
+        },
+        "sequence_recurrence": {
+          "passed": 300,
+          "total": 300
+        },
+        "struct_cell_wrangle": {
+          "passed": 300,
+          "total": 300
+        },
+        "string_parse": {
+          "passed": 300,
+          "total": 300
+        },
+        "signal_identity": {
+          "passed": 300,
+          "total": 300
+        }
+      },
+      "failures": []
+    }
+  ],
+  "elapsed_seconds": 3730.5,
+  "ok": true
+}

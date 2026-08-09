@@ -1,8 +1,9 @@
 [project]
 name = "octave-rl"
 description = "Seeded GNU Octave coding curriculum with deterministic fractional rewards"
+readme = "README.md"
 tags = ["octave", "code", "rl", "train", "eval"]
-version = "0.1.0"
+version = "0.2.0"
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "verifiers>=0.2.1,<0.3",
@@ -20,6 +21,7 @@ include = [
     "generators.py",
     "harness.py",
     "pyproject.toml",
+    "README.md",
 ]
 
 [tool.verifiers.eval]

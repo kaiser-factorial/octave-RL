@@ -30,6 +30,277 @@ entry is worth having.
 
 ---
 
+## 2026-08-09 — Held-out pools are disjoint by task and identical by prompt
+
+**Symptom.** None observed; found by answering the question "if we train on
+some tasks and evaluate on others, how is that not leakage?"
+
+**Measurement.** Comparing the training pool (seed `0`) against the standard
+held-out pool (seed `20260808`), 500 tasks per level at three levels:
+
+| unit of comparison | training | held-out | shared |
+|---|---:|---:|---:|
+| tasks (by their six hidden cases) | 1500 | 1500 | **0** |
+| **distinct prompts** | **32** | **30** | **30** |
+
+Task-level overlap is exactly zero, as the seed discipline intends. But a
+prompt is built from the signature plus the family/level description and
+carries nothing task-specific, so all 50 `sequence_recurrence` level-1 tasks in
+a pool share a byte-identical prompt. **Every prompt in the held-out pool also
+appears in the training pool.** (Seed `0` shows 32 rather than 30 because
+`_shape_sentence` states a row count when all six of a task's cases agree on
+one, which for `broadcast_arith` depends on the draw.)
+
+**What this means.** What is held out is the hidden test *inputs*, not the
+question. The environment asks "can you write a correct general implementation
+of these 30 functions" and checks the answer against inputs the model has never
+seen. That is a real generalization test over inputs, and no answer can leak,
+because the model never observes any hidden case.
+
+It is **not** a held-out-problem benchmark, and two things follow:
+
+1. `num_tasks = 500` reads as 500 problems. It is 500 test-suite draws over 30
+   problems. Every eval number is in-distribution on the problem.
+2. RL here can drive toward memorising 30 function bodies, and a seed-disjoint
+   evaluation would not detect that at all — it would show as a high score with
+   no transfer. If that matters for a given claim, the check has to be a
+   different Octave task set entirely, not a different seed.
+
+This is consistent with the 2026-08-08 finding that the substrate mostly
+measures Octave fluency and convention compliance: with 30 problems, that is
+close to the ceiling of what it can measure.
+
+**Blast radius.** No number changes. What changes is the wording: describing
+held-out pools as "disjoint from training" is true of tasks and misleading if a
+reader hears "disjoint problems".
+
+**Why it survived.** Disjointness was asserted at the level the seed controls
+(tasks) and never checked at the level the model observes (prompts). Nothing
+had ever counted distinct prompts.
+
+**Fix.** Documentation only. The package README states the 30-prompt structure
+under its own heading; the repository README and this entry record the
+measurement. The generator is unchanged — real problem diversity means
+parameterising the descriptions, which is a larger design change than the
+2026-08-09 repair and would invalidate the paired re-measurement.
+
+**Verification.** Counted directly from `build_tasks` over both seeds.
+
+**Residual risk.** Thirty problems is few. Any claim of the form "the policy
+learned to write Octave" needs an out-of-suite check that does not exist yet.
+
+## 2026-08-09 — Prompts now state the shape the grader compares, and two arguments arrive usable
+
+**Symptom.** The reward path compares `size(actual)` against the expected
+value's shape exactly, so output orientation is graded. No prompt stated the
+graded shape. What every prompt did say was *"Preserve input orientation"* —
+which is not the rule being enforced, is silent about the output, and for two
+families points the opposite way from what the reference does.
+
+**Root cause.** Two distinct halves.
+
+*Data.* `linsolve_tolerance` serialised `b = A @ x0` with `b.tolist()`, so it
+arrived as a `1xm` row and `A\b` was nonconformant on every hidden case; the
+reference hid this behind an undisclosed `b=b(:)`. `broadcast_arith` sent both
+`a` and `b` as rows while its own prompt called `a` a column vector, so bare
+`a + b` was nonconformant and only `a(:) + b(:)'` worked.
+
+*Prompt.* `reshape_permute` levels 2–3 read "For a 3-D array A, return
+dimensions ordered [2 1 3]" against the signature `reshape_permute(x, dims)`.
+There is no `A`; `x` is a flat column-major vector, `dims` is its intended 3-D
+size, and the graded output is the permuted array flattened back to a row.
+Nothing in the prompt said any of that, which is why both models scored
+`correct_given_executed = 0.000` across 96 rollouts — code that runs and cannot
+be right.
+
+**Blast radius.** Every reward number this project has produced. Per-family
+pass rates are not comparable across this change; family *rankings* and the
+"family dominates level" conclusion are. Task ids, family names, level
+structure, hidden expected values and reward multipliers are unchanged, so
+family-level comparison against `artifacts/group-spread-20260808/` remains
+meaningful. Task-level pairing does not: the prompts differ, and for
+`linsolve_tolerance` and `broadcast_arith` the inputs differ too.
+
+**Why it survived.** Both validators score the generator's own reference
+solution. That check cannot fail in this way — the reference passes *because*
+it contains the coercion. This is the third instance of the same pattern in
+this log, so the check that was missing has now been written rather than noted:
+`scripts/validate_natural_solutions.py` runs a deliberately naive solution per
+family and level — no `(:)`, no defensive transpose — and requires it to pass.
+
+**Fix.**
+- `b` and `a` are serialised with the orientation their signatures imply.
+- The blanket orientation line is gone. Each prompt now carries one generated
+  sentence — "Return a row vector (1-by-N).", "Return a column vector
+  (N-by-1).", "Return a matrix with 2 rows.", "Return a 2-D matrix." — derived
+  by `_shape_sentence` from the same expected values the grader uses, so the
+  claim and the comparison cannot drift apart. A row count is stated only when
+  every hidden case agrees on it.
+- `reshape_permute` levels 2–3 describe their real contract.
+- Deliberately unchanged: family names, task ids, level structure, hidden
+  values, tolerances, the reward, and the transpose metric.
+
+**Verification.** `scripts/validate_natural_solutions.py` on the pinned GNU
+Octave 10.2.0. The check was confirmed non-vacuous by running it against the
+pre-fix generator, where the naive solution scores **0/6 hidden cases** on
+`linsolve_tolerance` and `broadcast_arith` at all three levels with
+`nonconformant arguments`, and passes everywhere after the fix.
+`test_every_prompt_states_the_shape_the_grader_compares_against` asserts the
+prompt/grader relation over 120 tasks per level.
+
+**Residual risk.** The naive solutions are one per family and level and encode
+one person's idea of "obvious"; a different natural answer could still hit an
+unstated convention. `signal_identity` and `sliding_window` remain genuinely
+hard and were deliberately not made easier.
+
+## 2026-08-09 — The orientation census was an undercount, and one family was misattributed
+
+**Symptom.** Re-deriving the 2026-08-08 orientation finding from
+`generators.py` and the retained group-spread traces disagreed with it in both
+directions. That entry names `linsolve_tolerance`, `reshape_permute` and
+`signal_identity` as the three families carrying undisclosed reference-side
+coercion. The count is wrong and one member is wrong.
+
+**Root cause.** The earlier census grepped for `(:)` column coercion. That
+finds `x(:)` but not a trailing transpose, and it does not distinguish coercion
+that *changes* a value's orientation from coercion that is a no-op on the
+orientation the generator actually sends. Recounting by hand against what each
+argument becomes in Octave — a flat JSON list is a `1xN` **row**, a nested list
+is a matrix:
+
+| family | reference coercion | is it a trap? |
+|---|---|---|
+| `linsolve_tolerance` | `b=b(:)` | **yes** — `b` arrives as a row, so bare `A\b` cannot run |
+| `broadcast_arith` | `a(:) + b(:)'` | **yes** — both arrive as rows, so bare `a+b` is nonconformant |
+| `sliding_window` L2/L3 | trailing `'` on `mean(x(idx),2)` | partly — the vectorized answer yields a column |
+| `string_parse` | trailing `'` on `sscanf` | partly — `sscanf` returns a column |
+| `reshape_permute` L2/L3 | `out(:)'` | **yes**, compounded by a prompt describing a different signature |
+| `reshape_permute` L1 | `x(:)` | no — the prompt says "Return x as a column vector" |
+| `signal_identity` | `x(:)'` | **no** — a no-op on the row that is actually sent |
+
+So `broadcast_arith` and `string_parse` were missing from the census, and
+`signal_identity` was in it without cause.
+
+**The refutation of `signal_identity` is measurable, not just textual.** Its
+`execution_fraction` is 0.579 with `correct_given_executed` 0.208 — code that
+runs and computes the wrong number, which is what genuine difficulty looks
+like. Compare `linsolve_tolerance` at 0.058 execution: code that cannot run.
+`transposed_fraction` is 0.042. The family is hard because FFT-based circular
+autocorrelation is hard.
+
+**`sliding_window` is also not an orientation trap.** Classifying all 153
+retained `sliding_window` rollouts: 42% never run (30.7% miscellaneous errors,
+8.5% hallucinated functions like `movingmedian` and `lead`, 2.0%
+index/conformance), 28.8% are truncation syntax errors, 19.6% run and return
+wrong values or the wrong length, and only **3.3% are transposes**. The
+trailing `'` in its reference is real but explains almost none of the failures.
+This family is ordinary difficulty and is published as such.
+
+**Blast radius.** The 2026-08-08 entry's mechanism and its headline conclusion
+(family composition dominates level) both survive; its *membership list* does
+not, and a fix applied only to the three named families would have left
+`broadcast_arith` — a 0.236/0.014 family — broken.
+
+**Why it survived.** It was a one-day-old finding recorded from a `grep` rather
+than from the per-family metrics that were already in the retained traces. The
+traces carried `execution_fraction`, `correct_given_executed` and
+`transposed_fraction` per rollout the whole time; nothing had aggregated them
+by family. The distinguishing question — "does the natural answer *run*?" — is
+answered directly by `execution_fraction` and was never asked per family.
+
+**Fix.** Census corrected above. The generator and prompt changes it implies
+are in the 2026-08-09 entry "Prompts now state the shape the grader compares".
+
+**Verification.** Per-family aggregation over the 1,632 retained rollouts in
+`artifacts/group-spread-20260808/`; failure-mode classification over the 153
+`sliding_window` rollouts. Shapes re-derived from `harness.octave_literal` and
+`harness._octave_shape`.
+
+**Residual risk.** The classification of "does not run: other" (30.7% of
+`sliding_window`) is a long tail read from first-error strings, not a taxonomy.
+The seven families with no identified coercion have been checked for
+orientation only; other undisclosed conventions remain possible.
+
+## 2026-08-09 — Level 3 silently dropped the task definition on two families
+
+**Symptom.** `struct_cell_wrangle` scores 0.792 at level 2 and **0.000** at
+level 3 for Nemotron, on what is the same underlying computation. Execution
+falls from 0.833 to 0.111. `sequence_recurrence` shows the same shape: 0.583 to
+0.000.
+
+**Root cause.** Level 3 differs from level 2 only by a vectorization
+constraint, but its `DESCRIPTIONS` entry was written as a *summary* rather than
+a restatement. Level 2 read "Given a numeric matrix A, return [column minima;
+column maxima]." Level 3 read only "Return [column minima; column maxima]
+without for/while loops." — dropping the sentence that says what `A` is. The
+model's only remaining clue is the function name, and the name is
+`struct_cell_wrangle`, which describes no part of the level-2/3 task. Models
+duly wrote cell-array code and got `matrix cannot be indexed with {` on every
+case. `sequence_recurrence` level 3 dropped the entire recurrence definition
+`x(1)=a, x(2)=b, x(i)=p*x(i-1)+q*x(i-2)`, leaving "Return the recurrence
+terms". `signal_identity` level 3 dropped "with lag zero first".
+
+**Blast radius.** Every level-3 number for those families, and any conclusion
+drawn from the level ladder — the "3.6x level effect" is partly this defect
+rather than difficulty. Level 3 was reported as "stretch tasks"; for these
+families it was the level-2 task with its specification removed.
+
+**Why it survived.** Nothing related a level's description to its neighbours,
+and the family-level view that makes it obvious (an L2→L3 collapse of 0.792 to
+0.000 on the same computation) was never produced. The level ladder was always
+summarised as an average over families, which hid it.
+
+**Fix.** Every level-3 description now restates its own task in full.
+`test_level_three_descriptions_restate_their_own_task` asserts that, for the
+six families whose level 3 is level 2 plus a constraint, no content word
+present at level 2 is missing at level 3. The four families whose task genuinely
+changes between those levels are listed explicitly in the test rather than
+skipped silently.
+
+**Verification.** `pytest tests/` — 78 passed, 6 skipped. Prompts re-rendered
+for all 30 family/level cells and read.
+
+**Residual risk.** The test compares level 2 against level 3 only; a level-1
+description could still under-specify. The family name
+`struct_cell_wrangle` remains misleading for its own level-2/3 tasks and was
+kept to preserve task ids and comparability with earlier runs.
+
+## 2026-08-09 — A truncated code block reached Octave with its opening fence attached
+
+**Symptom.** 70 of 1,632 retained rollouts (4.3%) have a `submitted_source`
+beginning with ` ```octave `, and every one reports `syntax error near line 1,
+column 1` on all six cases.
+
+**Root cause.** `CODE_RE` requires a closing fence. A generation truncated at
+the 1,536-token cap inside its code block has an opening fence and no closing
+one, so `findall` returns nothing and the bare-function fallback fires — that
+fallback returns `text.strip()` whole, opening fence included, because it was
+written for a model that emitted no fence at all.
+
+**Blast radius.** Diagnostic, not reward. All 70 were genuinely truncated
+mid-body — the last line is mid-comment or mid-statement in every case — so
+they would have scored zero regardless; measured reward effect on these traces
+is nil. What it does corrupt is the *repair* turn: a multi-turn rollout gets
+"syntax error near line 1" instead of the real error, so attempt 2 is spent on a
+mistake the model did not make. It also mislabels the failure in any taxonomy
+built from feedback strings — 28.8% of `sliding_window` failures are this.
+
+**Why it survived.** `test_format_is_observed_but_bare_code_remains_executable`
+covers both a well-formed fenced block and a bare function with no fence. The
+unterminated-fence case is neither, and truncation only produces it under a
+token cap that unit tests do not impose.
+
+**Fix.** The fallback now strips a leading opening-fence line before returning.
+`test_truncated_code_block_does_not_keep_its_opening_fence` covers it.
+
+**Verification.** `pytest tests/`. Counted over
+`artifacts/group-spread-20260808/` traces: 70 fenced, 0 with a terminal
+`endfunction`/`end`.
+
+**Residual risk.** Truncation itself is untouched — 4.3% of rollouts still lose
+their answer to the token cap, and that is a generation-budget question, not a
+parsing one.
+
 ## 2026-08-08 — Three task families are hard because of an undisclosed orientation convention, not difficulty
 
 **Symptom.** Per-family pass rates at T=1.0 (72–96 rollouts per family, both
@@ -535,6 +806,17 @@ symmetric answer equal to its own transpose scores as correct rather than both.
 **The reward is unchanged and a transposed answer still scores zero**, because
 the prompts explicitly require preserving input orientation — it is a stated
 part of the task, not an incidental convention.
+
+> **Amended 2026-08-09.** That last clause was the weak point and it did not
+> hold. "Preserve input orientation" says nothing about the *output* shape,
+> which is what the grader compares, and for `linsolve_tolerance` and
+> `broadcast_arith` the reference deliberately changed orientation while the
+> prompt told the model not to. The line has been removed. Each prompt now
+> states its graded output shape explicitly, generated from the expected values
+> themselves — so the justification for scoring a transpose as zero is now the
+> one claimed here, rather than an approximation of it. The decision to keep
+> transposition out of the reward is unchanged. See "Prompts now state the
+> shape the grader compares".
 
 **On rewarding it anyway.** Defensible, and cheap to add as a configurable
 credit, but it is a real trade: partial credit for a transpose weakens a

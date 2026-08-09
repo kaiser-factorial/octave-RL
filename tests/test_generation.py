@@ -10,12 +10,13 @@ sys.path.insert(
 
 import harness as harness_module
 import octave_rl as octave_environment
-from generators import build_tasks
+from generators import DESCRIPTIONS, build_tasks
 from harness import (
     CANDIDATE_RESULT_MARKER_PREFIX,
     RESULT_MARKER_PREFIX,
     SANDBOX_CREATION_MAX_ATTEMPTS,
     SANDBOX_FINALIZE_TIMEOUT_SECONDS,
+    _octave_shape,
     build_candidate_runner,
     build_harness,
     candidate_result_marker,
@@ -59,6 +60,105 @@ def test_all_families_and_levels_are_present() -> None:
     for level in (1, 2, 3):
         tasks = build_tasks(level, 20, 42, False, True)
         assert {task["info"]["family"] for task in tasks} == expected
+
+
+def test_every_prompt_states_the_shape_the_grader_compares_against() -> None:
+    """The prompt's declared output shape must match the graded expected value.
+
+    Before 2026-08-09 the prompts carried a blanket "Preserve input
+    orientation" line while the grader compared ``size(actual)`` exactly
+    against a reference that silently coerced orientation. Three families were
+    near-unsolvable as a result and nothing failed, because no test related the
+    prompt text to the expected values.
+    """
+    for level in (1, 2, 3):
+        for task in build_tasks(level, 40, 7, False, True):
+            info = task["info"]
+            text = task["prompt"][0]["content"]
+            assert "Preserve input orientation" not in text
+            claims = [line for line in text.splitlines() if line.startswith("Return a ")]
+            assert len(claims) == 1, f"{info['family']} L{level}: {claims}"
+            claim = claims[0]
+            for case in info["cases"]:
+                rows, cols = _octave_shape(case["expected"])
+                where = f"{info['family']} L{level} claims {claim!r} but a case is {rows}x{cols}"
+                if claim == "Return a scalar.":
+                    assert (rows, cols) == (1, 1), where
+                elif claim == "Return a row vector (1-by-N).":
+                    assert rows == 1, where
+                elif claim == "Return a column vector (N-by-1).":
+                    assert cols == 1, where
+                elif claim == "Return a 2-D matrix.":
+                    assert rows > 1 and cols > 1, where
+                else:
+                    assert claim == f"Return a matrix with {rows} rows.", where
+
+
+def test_level_three_descriptions_restate_their_own_task() -> None:
+    """Level 3 adds a constraint; it must not drop the task definition.
+
+    `struct_cell_wrangle` level 3 once read only "Return [column minima;
+    column maxima] without for/while loops", leaving the misleading family name
+    as the model's only clue about the input type. It scored 0.000 against
+    level 2's 0.792 on the same underlying task.
+    """
+    # Families whose level 3 is level 2 plus a vectorization constraint. The
+    # rest change the task itself between those levels -- linsolve_tolerance
+    # switches to [x; norm(A*x-b)], sliding_window from mean to median,
+    # reshape_permute to a different permutation, string_parse to decimals --
+    # so their wording legitimately differs.
+    same_task_at_level_three = {
+        "reduce_along_dim",
+        "logical_index",
+        "broadcast_arith",
+        "sequence_recurrence",
+        "struct_cell_wrangle",
+        "signal_identity",
+    }
+    stopwords = {"without", "loops", "for/while", "no", "return", "the", "a", "of", "and"}
+
+    def content_words(text: str) -> set[str]:
+        cleaned = text.lower().replace(",", " ").replace(";", " ").replace(".", " ")
+        return {word for word in cleaned.split() if word not in stopwords}
+
+    for family in sorted(same_task_at_level_three):
+        descriptions = DESCRIPTIONS[family]
+        missing = content_words(descriptions[1]) - content_words(descriptions[2])
+        assert not missing, (
+            f"{family} level 3 drops terms its level 2 states: {sorted(missing)}"
+        )
+
+
+def test_orientation_sensitive_arguments_arrive_as_the_prompt_describes() -> None:
+    """`A\\b` and `a + b` must be conformant as written.
+
+    Both families used to serialise a vector argument as a row, so the natural
+    solution raised "nonconformant arguments" on every hidden case no matter
+    what the model wrote.
+    """
+    for level in (1, 2, 3):
+        for task in build_tasks(level, 40, 11, False, True):
+            info = task["info"]
+            for case in info["cases"]:
+                if info["family"] == "linsolve_tolerance":
+                    matrix, vector = case["args"]
+                    assert _octave_shape(vector) == [len(matrix), 1]
+                if info["family"] == "broadcast_arith":
+                    left, right = case["args"]
+                    assert _octave_shape(left)[1] == 1
+                    assert _octave_shape(right)[0] == 1
+
+
+def test_truncated_code_block_does_not_keep_its_opening_fence() -> None:
+    """A generation cut off inside its fence must still yield runnable source.
+
+    Without this the candidate .m file starts with "```octave" and every case
+    reports "syntax error near line 1", which tells a repair turn nothing.
+    """
+    truncated = "Here you go:\n```octave\nfunction y=f(x)\n  y = x + 1;\n"
+    extracted = extract_code(truncated)
+    assert extracted.startswith("function")
+    assert "```" not in extracted
 
 
 def test_format_is_observed_but_bare_code_remains_executable() -> None:

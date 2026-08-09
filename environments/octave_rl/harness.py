@@ -32,12 +32,20 @@ CANDIDATE_RESULT_MARKER_PREFIX = "__OCTAVE_CANDIDATE_RESULT__"
 CODE_RE = re.compile(r"```(?:octave|matlab)?\s*\n(.*?)```", re.IGNORECASE | re.DOTALL)
 
 
+OPEN_FENCE_RE = re.compile(r"(?s)^.*?```(?:octave|matlab)?[ \t]*\n", re.IGNORECASE)
+
+
 def extract_code(text: str) -> str:
     matches = CODE_RE.findall(text)
     if len(matches) == 1:
         return matches[0].strip()
     if not matches and re.search(r"(?m)^\s*function\b", text):
-        return text.strip()
+        # A generation truncated inside its code block has an opening fence and
+        # no closing one, so CODE_RE misses it and this bare-function fallback
+        # fires. Without dropping the opening fence the candidate .m file starts
+        # with "```octave" and every case dies on "syntax error near line 1",
+        # which tells a repair turn nothing about the actual mistake.
+        return OPEN_FENCE_RE.sub("", text, count=1).strip()
     return ""
 
 

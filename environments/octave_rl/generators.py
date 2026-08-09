@@ -10,12 +10,38 @@ import numpy as np
 Task = dict[str, Any]
 
 
+def _shape_sentence(cases: list[dict[str, Any]]) -> str:
+    """State the graded output shape, derived from the values the grader uses.
+
+    Scoring compares ``size(actual)`` against the expected value's Octave shape
+    exactly, so output orientation is part of the task. Deriving the sentence
+    from ``expected`` rather than writing it by hand keeps the prompt's claim
+    and the grader's comparison from drifting apart -- the failure mode that
+    made three families near-unsolvable before 2026-08-09.
+
+    A row count is stated only when every hidden case agrees on it; families
+    whose output width follows the inputs get the unquantified form.
+    """
+    expected = cases[0]["expected"]
+    if not isinstance(expected, list):
+        return "Return a scalar."
+    if expected and all(isinstance(row, list) for row in expected):
+        if len(expected[0]) == 1:
+            return "Return a column vector (N-by-1)."
+        heights = {len(case["expected"]) for case in cases}
+        if len(heights) == 1:
+            return f"Return a matrix with {heights.pop()} rows."
+        return "Return a 2-D matrix."
+    return "Return a row vector (1-by-N)."
+
+
 def _row(family, level, signature, cases, reference, *, tolerance=1e-9, vectorized=False):
     fn = signature.split("=")[1].split("(")[0].strip()
     prompt = (
         f"Write this GNU Octave function:\n\n    {signature}\n\n"
         f"{DESCRIPTIONS[family][level - 1]}\n"
-        f"Return exactly one fenced `octave` code block. Preserve input orientation. "
+        f"{_shape_sentence(cases)}\n"
+        f"Return exactly one fenced `octave` code block. "
         f"Hidden tests include edge cases."
     )
     return {
@@ -29,31 +55,36 @@ def _row(family, level, signature, cases, reference, *, tolerance=1e-9, vectoriz
     }
 
 
+# Every level-3 entry restates its own task in full. Level 3 differs from
+# level 2 only by a vectorization constraint, so an entry that says merely
+# "...without for/while loops" leaves the model nothing to work from but the
+# family name -- which is how `struct_cell_wrangle` level 3 fell from 0.792 to
+# 0.000 while models guessed at cell arrays. Do not compress these again.
 DESCRIPTIONS = {
     "reduce_along_dim": [
         "Return the arithmetic mean of each column.",
         "Return the k-th largest value in each column; ties count separately.",
-        "Return the k-th largest value in each column without for/while loops.",
+        "Return the k-th largest value in each column; ties count separately; no for/while loops.",
     ],
     "logical_index": [
-        "Return a row vector containing the positive elements of x, in original order.",
+        "Return the positive elements of x, in original order.",
         "Replace values outside inclusive [lo, hi] with NaN.",
         "Replace values outside inclusive [lo, hi] with NaN without for/while loops.",
     ],
     "reshape_permute": [
-        "Return x as a column vector.",
-        "For a 3-D array A, return dimensions ordered [2 1 3].",
-        "For a 3-D array A, return dimensions ordered [3 1 2] without loops.",
+        "Return the elements of x as a single column.",
+        "x holds the elements of a 3-D array of size dims in column-major order. Reshape x to dims, reorder its dimensions to [2 1 3], then flatten the result back to a vector in column-major order.",
+        "x holds the elements of a 3-D array of size dims in column-major order. Reshape x to dims, reorder its dimensions to [3 1 2], then flatten the result back to a vector in column-major order, without for/while loops.",
     ],
     "broadcast_arith": [
         "Return the outer sum of column vector a and row vector b.",
-        "Return the matrix of squared pairwise differences between a and b.",
-        "Return squared pairwise differences without for/while loops.",
+        "Return the matrix of squared pairwise differences between column vector a and row vector b.",
+        "Return the matrix of squared pairwise differences between column vector a and row vector b, without for/while loops.",
     ],
     "sliding_window": [
         "Return sums of every consecutive window of width w (valid windows only).",
         "Return means of valid windows of width w and stride s.",
-        "Return valid-window medians with stride s without for/while loops.",
+        "Return medians of valid windows of width w and stride s, without for/while loops.",
     ],
     "linsolve_tolerance": [
         "Solve the square linear system A*x=b.",
@@ -63,22 +94,22 @@ DESCRIPTIONS = {
     "sequence_recurrence": [
         "Return the first n terms where x(1)=a and x(i)=x(i-1)+d.",
         "Return n terms where x(1)=a, x(2)=b, x(i)=p*x(i-1)+q*x(i-2).",
-        "Return the recurrence terms without for/while loops; use filter or equivalent.",
+        "Return n terms where x(1)=a, x(2)=b, x(i)=p*x(i-1)+q*x(i-2), without for/while loops; use filter or equivalent.",
     ],
     "struct_cell_wrangle": [
         "Given numeric row vectors a and b, return their elementwise sums.",
         "Given a numeric matrix A, return [column minima; column maxima].",
-        "Return [column minima; column maxima] without for/while loops.",
+        "Given a numeric matrix A, return [column minima; column maxima], without for/while loops.",
     ],
     "string_parse": [
-        "Parse a comma-separated char row such as '1,2,-3' into a numeric row vector.",
+        "Parse a comma-separated char row such as '1,2,-3' into numbers.",
         "Parse numbers separated by commas with optional surrounding spaces.",
-        "Parse comma-separated finite decimal numbers without for/while loops.",
+        "Parse comma-separated finite decimal numbers, without for/while loops.",
     ],
     "signal_identity": [
-        "Return the circular shift of row vector x by integer k.",
+        "Return the circular shift of x by integer k.",
         "Return the real circular autocorrelation using FFT, with lag zero first.",
-        "Return FFT-based real circular autocorrelation without for/while loops.",
+        "Return the real circular autocorrelation using FFT, with lag zero first, without for/while loops.",
     ],
 }
 
@@ -144,7 +175,13 @@ def broadcast_arith(rng, level):
     for _ in range(6):
         a, b = rng.integers(-8, 9, rng.integers(2, 6)), rng.integers(-8, 9, rng.integers(2, 6))
         out = a[:, None] + b[None, :] if level == 1 else (a[:, None] - b[None, :]) ** 2
-        cases.append({"args": [a.tolist(), b.tolist()], "expected": out.tolist()})
+        # `a` is serialised as a column so the prompt's "column vector a and row
+        # vector b" is literally true and bare `a + b` broadcasts correctly.
+        # Sending both as rows made the natural answer nonconformant.
+        cases.append({
+            "args": [a.reshape(-1, 1).tolist(), b.tolist()],
+            "expected": out.tolist(),
+        })
     sig = "function out = broadcast_arith(a, b)"
     expr = "a(:) + b(:)'" if level == 1 else "(a(:) - b(:)').^2"
     ref = f"function out=broadcast_arith(a,b)\n out={expr};\nendfunction"
@@ -176,8 +213,12 @@ def linsolve_tolerance(rng, level):
         A = rng.normal(size=(m, n)); x0 = rng.normal(size=n); b = A @ x0
         x = np.linalg.lstsq(A, b, rcond=None)[0]
         out = x if level < 3 else np.r_[x, np.linalg.norm(A @ x - b)]
+        # `b` is serialised as a column so `A\b` is conformant as written. As a
+        # row it made every hidden case fail with "nonconformant arguments"
+        # regardless of what the model wrote, while the reference hid the
+        # problem behind an undisclosed `b=b(:)`.
         cases.append({
-            "args": [A.tolist(), b.tolist()],
+            "args": [A.tolist(), b.reshape(-1, 1).tolist()],
             "expected": out.reshape(-1, 1).tolist(),
         })
     sig = "function out = linsolve_tolerance(A, b)"

@@ -3,8 +3,9 @@
 Octave RL is a reproducible reinforcement-learning environment for teaching
 language models to write GNU Octave functions. It uses the native
 `verifiers.v1` taskset and harness APIs, generates seeded problems with hidden
-NumPy-derived test cases, executes candidate `.m` files in isolated Prime
-Sandboxes, and awards deterministic partial credit.
+NumPy-derived test cases, executes candidate `.m` files against a pinned GNU
+Octave 10.2.0 — in an isolated Prime Sandbox or a bounded local subprocess —
+and awards deterministic partial credit.
 
 The repository includes the environment, evaluation and prime-rl
 configurations, a staged curriculum controller, tests, analysis scripts, and
@@ -30,6 +31,14 @@ The environment uses `verifiers.v1` throughout. It does not use the legacy v0
 `Environment` contract.
 
 ## Results at a glance
+
+> **Every number in this section predates 2026-08-09** and was measured on a
+> task pool with three known defects: two families whose natural solution could
+> not run, one whose prompt described a different signature, and two level-3
+> descriptions that had dropped their task definition. The environment is at
+> `0.2.0`; these are `0.1.0` measurements. They are left unrevised because they
+> are what was measured. See [PIPELINE_LOG.md](PIPELINE_LOG.md) for what each
+> defect did and [OCTAVE_HANDOFF.md](OCTAVE_HANDOFF.md) for what still holds.
 
 Small calibration runs selected `Qwen/Qwen3.5-4B`: it was the first tested
 Qwen size with nonzero reward and landed in the desired 10–35% one-turn
@@ -154,26 +163,64 @@ cannot be obtained the backend refuses to run unless
 `OCTAVE_RL_ALLOW_UNISOLATED_LOCAL=1` is set, and records then report
 `network_isolated = false`.
 
-## Validate the reference pool
+## Validate the task pool
 
 ```bash
-# through the reward path, no Prime usage
+# does the *obvious* solution pass? no Prime usage
+uv run python scripts/validate_natural_solutions.py --num-tasks 500
+
+# does the reference solution pass, through the reward path? no Prime usage
 uv run python scripts/validate_local_runtime.py --num-tasks 500 --seed 0
 
-# through the in-Octave harness, in Prime Sandboxes (incurs platform usage)
+# does the reference solution pass, through the in-Octave harness?
+# runs in Prime Sandboxes and incurs platform usage
 uv run python scripts/validate_reference_pool.py
 ```
 
-Run both. They exercise **different code paths**, and that difference has bitten
-once already: `validate_reference_pool.py` checks `build_harness`, which
-compares inside Octave, while rewards come from `build_candidate_runner` plus
-the host-side comparison. A defect found on 2026-08-08 made every correct
-matrix-valued answer score zero — 16.7% of the pool — while the Sandbox
-validation stayed green, because it was measuring the other path. See
-[PIPELINE_LOG.md](PIPELINE_LOG.md).
+Run all three. They exercise **different code paths**, and each difference has
+bitten:
 
-Both paths now pass 9,000/9,000 hidden cases on the pinned GNU Octave 10.2.0:
-500 tasks at each of three levels, six cases each.
+- `validate_reference_pool.py` checks `build_harness`, which compares inside
+  Octave, while rewards come from `build_candidate_runner` plus the host-side
+  comparison. A defect found on 2026-08-08 made every correct matrix-valued
+  answer score zero — 16.7% of the pool — while the Sandbox validation stayed
+  green, because it was measuring the other path.
+- Both of those score the generator's **own reference solution**, which cannot
+  fail when a family is solvable only through a convention the prompt never
+  states: the reference passes precisely because it contains the convention.
+  `validate_natural_solutions.py` closes that hole by running a deliberately
+  naive solution per family and level. Against the pre-2026-08-09 generator it
+  scores 0/6 hidden cases on `linsolve_tolerance` and `broadcast_arith` at every
+  level; both validators above were green at the time.
+
+See [PIPELINE_LOG.md](PIPELINE_LOG.md) for both entries. Run
+`validate_natural_solutions.py` after any generator or prompt change.
+
+All three pass on the pinned GNU Octave 10.2.0 at 500 tasks per level, six
+hidden cases each.
+
+### Running the validators on macOS
+
+`unshare` and `chroot` are Linux-only, and there is no arm64 build of the
+pinned image, so run them in the pinned image under emulation:
+
+```bash
+docker build --platform linux/amd64 -t octave-rl-validate:10.2.0 - <<'EOF'
+FROM gnuoctave/octave:10.2.0
+RUN pip3 install --no-cache-dir --break-system-packages numpy
+EOF
+
+docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w \
+  -e OCTAVE_RL_OCTAVE_BIN=/usr/local/bin/octave-cli \
+  -e OCTAVE_RL_ALLOW_UNISOLATED_LOCAL=1 \
+  octave-rl-validate:10.2.0 \
+  python3 scripts/validate_natural_solutions.py --num-tasks 500
+```
+
+The container is the isolation boundary here, which is why
+`OCTAVE_RL_ALLOW_UNISOLATED_LOCAL=1` is acceptable in it and not on a host.
+Emulation costs roughly 4x: budget about 90 minutes for a full 1,500-task
+reference pass.
 
 ## Train with prime-rl
 

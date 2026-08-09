@@ -1,0 +1,35 @@
+{
+  "octave": "GNU Octave, version 10.2.0",
+  "interpreter": "/usr/local/bin/octave-cli",
+  "rootfs": null,
+  "network_isolated": true,
+  "isolation_prefix": "/usr/bin/unshare --net --",
+  "filesystem_isolated": false,
+  "seed": 314159,
+  "num_tasks_per_level": 500,
+  "levels": [
+    {
+      "level": 1,
+      "tasks": 500,
+      "cases_passed": 3000,
+      "cases_total": 3000,
+      "failures": []
+    },
+    {
+      "level": 2,
+      "tasks": 500,
+      "cases_passed": 3000,
+      "cases_total": 3000,
+      "failures": []
+    },
+    {
+      "level": 3,
+      "tasks": 500,
+      "cases_passed": 3000,
+      "cases_total": 3000,
+      "failures": []
+    }
+  ],
+  "elapsed_seconds": 697.9,
+  "ok": true
+}

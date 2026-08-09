@@ -1,6 +1,6 @@
 # Octave RL handoff
 
-Last updated: 2026-08-08 (evening -- hosted-evaluation session)
+Last updated: 2026-08-09 (taskset-repair and publication session)
 
 This is the shortest trustworthy orientation for continuing the Octave RL
 work. Read `README.md` for the repository map, `REPORT.md` for the full
@@ -13,90 +13,134 @@ and gate pre-reads at `~/Projects/Nemotron/NemoH/RL investigation - PART B/`.
 The G1 pre-read there is written against that design doc's section numbers and
 is the right entry point for "what does this mean for Nemotron".
 
-## Start here: the open decision
+## Start here: what changed on 2026-08-09
 
-Everything below this section is still accurate. This section exists because
-the 2026-08-08 evening measurements changed what the *next* experiment should
-be, and the change is not obvious from reading the status entries in order.
+The 2026-08-08 evening session ended with an open decision between "fix the
+taskset" (Option A) and "train and watch dispersion" (Option B), recommending A
+first. **Option A has now been done**, and doing it corrected the finding that
+motivated it. Read `PIPELINE_LOG.md` entries dated 2026-08-09 before trusting
+any per-family number written before that date.
 
-**The finding.** At the training temperature, rollouts of one task are strongly
-correlated — 2.0–4.6x binomial dispersion for Nemotron, 3.0–3.2x for Qwen on the
-same tasks. Groups are therefore mostly unanimous, and a unanimous group
-contributes exactly zero GRPO advantage. At `group_size = 8` on Level 2, **50%
-of groups teach nothing**; the closed-form estimate that informed earlier
-planning said 3.6%, and was wrong by 14x because it assumed independence.
+### What the repair actually found
 
-**Why that happens is now known, and it is not a property of "difficulty".**
-Per-family pass rates span 0.030 to 0.734 for Nemotron — a 24x range — while the
-level ladder spans only 3.6x. Family matters roughly **7x more than level**. The
-pool mixes families the models pass ~73% of the time with families they pass
-~0–3% of the time, so groups drawn from it are mostly unanimous by construction.
+The 2026-08-08 census — "three families carry undisclosed reference-side
+orientation coercion: `linsolve_tolerance`, `reshape_permute`,
+`signal_identity`" — was derived from a `grep` for `(:)` and was wrong in both
+directions. Re-derived against what each argument becomes in Octave, and
+cross-checked against the per-family metrics already sitting in the retained
+traces:
 
-**And the weakest families are weak for a specific, fixable reason.**
-`linsolve_tolerance` scores 0.030 (Nemotron) and 0.000 (Qwen) over 72 rollouts
-each. Every hidden case fails identically with `nonconformant arguments (op1 is
-6x2, op2 is 1x6)`: the generator serialises `b` as a **row** vector, so the
-natural `A\\b` cannot run. The reference solution silently coerces with
-`b=b(:)`, and the prompt not only omits this but says *"Preserve input
-orientation"*, which points the other way. Three families carry undisclosed
-reference-side orientation coercion — `linsolve_tolerance`, `reshape_permute`,
-`signal_identity` — and they are three of the four worst performers for both
-models. Full write-up in `PIPELINE_LOG.md`, entry "Three task families are hard
-because of an undisclosed orientation convention".
+- **`broadcast_arith` and `string_parse` were missing from it.** Both carry the
+  same class of defect; `broadcast_arith` sent `a` and `b` as rows while its own
+  prompt called `a` a column vector, so bare `a + b` was nonconformant.
+- **`signal_identity` does not belong in it.** Its `x(:)'` is a no-op on the row
+  the generator actually sends. Its `execution_fraction` is 0.579 with
+  `correct_given_executed` 0.208 — code that runs and computes the wrong answer,
+  which is what genuine difficulty looks like, against
+  `linsolve_tolerance`'s 0.058 execution, which is code that cannot run.
+- **`sliding_window` is not an orientation trap either.** Of its 153 retained
+  rollouts, 3.3% are transposes; the rest are hallucinated functions, indexing
+  errors and truncation. It is ordinary difficulty and is published as such.
 
-`validate_reference_pool.py` cannot catch this: it confirms each reference
-passes its own harness, which it does *because the reference contains the
-coercion*. Same shape as the flattening defect — a green check measuring
-something adjacent to the thing that mattered.
+**A second, independent defect surfaced that no one had looked for.** Level 3
+differs from level 2 only by a vectorization constraint, but two level-3
+descriptions had been compressed into summaries that dropped the specification.
+`struct_cell_wrangle` level 3 read only "Return [column minima; column maxima]
+without for/while loops", leaving the misleading family name as the model's
+only clue about the input type — models wrote cell-array code and got `matrix
+cannot be indexed with {` on every case. It scored **0.000 against level 2's
+0.792 on the same computation**. `sequence_recurrence` level 3 had dropped the
+recurrence definition entirely. Any conclusion drawn from the level ladder is
+partly measuring this rather than difficulty.
 
-### The two candidate next experiments
+**A third, smaller one:** a generation truncated inside its code fence reached
+Octave with the opening fence attached, so all six cases reported `syntax error
+near line 1`. 70 of 1,632 rollouts. It costs no reward — all 70 were truncated
+mid-body and would have failed anyway — but it corrupts multi-turn repair
+feedback and any failure taxonomy built from feedback strings.
 
-**Option A — fix the taskset first (no GPU, hours).** The dispersion is a
-symptom; family composition is the cause. Concretely:
+### What changed in the environment (version 0.2.0)
 
-1. Decide the orientation question per family. Three defensible answers, in
-   `PIPELINE_LOG.md`: disclose the convention in the prompt, keep it but
-   reclassify those families as orientation probes and exclude them from
-   *training* sampling, or fix the generator so `b` arrives with the orientation
-   the signature implies. Options 1 and 3 are training-appropriate; option 2 is
-   evaluation-only.
-2. Audit the remaining families for other undisclosed conventions. Orientation
-   is the one that was looked for, and looking for one thing is how the previous
-   two defects survived. `sliding_window` (0.148 / 0.014) is weak with *no*
-   reference coercion, so its cause is different and unexamined.
-3. Re-measure per-family p at T=1.0 and choose the training mix on **family**
-   composition, targeting families near p = 0.5 where groups are most
-   informative — `struct_cell_wrangle` (0.528) is closest today.
-4. Re-run `scripts/group_spread.py` and check whether dispersion falls.
+- `linsolve_tolerance` receives `b` as a column and `broadcast_arith` receives
+  `a` as a column, so `A\b` and `a + b` are conformant as written.
+- The blanket "Preserve input orientation" line is gone. Each prompt now states
+  its graded output shape in a sentence generated by `_shape_sentence` from the
+  same expected values the grader compares against, so the claim and the
+  comparison cannot drift apart.
+- `reshape_permute` levels 2-3 describe their real contract; every level-3
+  description restates its own task.
+- `extract_code` strips an unterminated opening fence.
 
-Cost: about 25 cents of hosted inference per re-measurement pass, no GPU. This
-is the cheaper experiment and it tests a mechanism that is already identified.
+**Unchanged on purpose:** family names, task ids, level structure, hidden
+expected values, tolerances, the reward, and the transpose metric. Family-level
+comparison against `artifacts/group-spread-20260808/` therefore still holds;
+task-level pairing does not.
 
-**Option B — train and watch dispersion (≈$3–4, ~2h, 1 pod).** Everything above
-is measured on *base* policies. A policy under RL should decorrelate as it
-learns: a task moves from "always fails" through the middle before reaching
-"always solves". If dispersion falls materially over 20 steps, the group-size
-economics improve on their own and the taskset question is less urgent.
+### The check that was missing, and now exists
 
-Run the pending 20-step Qwen continuation at `group_size = 8` (not 2) on the
-L2/L3 mix, and measure dispersion at steps 0, 10 and 20 with
-`scripts/group_spread.py` against the retained rollouts. This doubles as the
-real training run that has been pending since the 3-step smoke, and as the
-durability work in "Improve durability" below.
+Both existing validators score the generator's *own reference solution*, which
+cannot fail when a family is solvable only through an undisclosed convention —
+the reference passes precisely because it contains the convention. This is the
+third instance of that pattern in `PIPELINE_LOG.md`, so the missing check has
+been written rather than noted again:
 
-**Recommended order: A then B.** Option A is ~15x cheaper, needs no
-authorization, and tests a mechanism that has already been localised to specific
-generator lines. Option B run first would measure dispersion decay on a pool
-whose composition is about to change, so its headline number would not survive
-the taskset fix. The one argument for B first is that it is also the pending
-real-training milestone and has value independent of this question — if the $12
-ceiling is going to be spent regardless, running B on the *current* pool at
-least establishes a dispersion-decay baseline to compare against later.
+```bash
+uv run python scripts/validate_natural_solutions.py --num-tasks 500
+```
 
-**What not to do.** Do not pick a curriculum mix by level alone. Level is the
-weaker of the two axes by roughly 7x, and a nominal L2/L3 mix can contain
-anything from a constant-zero family to a 73%-pass family depending on which
-tasks the seed draws.
+It runs a deliberately naive solution per family and level — no `(:)`, no
+defensive transpose — and requires it to pass. It was confirmed non-vacuous by
+running it against the pre-fix generator, where the naive solution scores 0/6
+hidden cases on `linsolve_tolerance` and `broadcast_arith` at all three levels.
+**Run it after any generator or prompt change.**
+
+### What the repair measured
+
+Re-measured paired against `artifacts/group-spread-20260808/` — same 32 tasks
+per level, same seed, same sampling, 1,536 rollouts, zero infrastructure
+errors, ~$0.80 all-in on a Prime CPU Sandbox. Full tables in
+`artifacts/postfix-eval-20260809/RESULTS.md`.
+
+| | Nemotron | Qwen3.5-4B |
+|---|---:|---:|
+| overall change, paired on 96 tasks | **+0.162** (SE 0.033, t = 4.84) | **+0.105** (SE 0.022, t = 4.87) |
+| `linsolve_tolerance` | 0.030 → **0.752** | 0.000 → **0.292** |
+| lowest family pass rate | 0.030 → **0.213** | 0.000 → **0.056** |
+| family spread (max/min) | 24.4x → **3.5x** | ∞ → **7.0x** |
+
+**The group economics that motivated the whole investigation improved directly.**
+Unanimous — therefore gradient-free — groups at `group_size = 8`:
+
+| model | L1 | L2 | L3 |
+|---|---|---|---|
+| Nemotron | 0.148 → **0.034** | 0.500 → **0.100** | 0.593 → **0.208** |
+| Qwen | 0.333 → **0.143** | 0.759 → **0.143** | 0.710 → **0.484** |
+
+The 2026-08-08 headline — "at `group_size = 8` on Level 2, 50% of groups teach
+nothing" — is now 10%.
+
+The families diagnosed as *genuinely* hard rather than defective
+(`signal_identity`, `sliding_window`) barely moved for Nemotron, which is the
+correct outcome. `logical_index` fell in both models (−0.095, −0.085); neither
+drop is individually significant and the only change there was cosmetic, but
+the direction agrees across models and is recorded as unresolved.
+
+Both host-side validators pass 9,000/9,000 on the pinned interpreter with real
+`unshare --net` isolation.
+
+### The next experiment
+
+Option B, now on a repaired pool: run the pending 20-step Qwen continuation at
+`group_size = 8` on the L2/L3 mix and measure dispersion at steps 0, 10 and 20
+with `scripts/group_spread.py`. The argument for doing it now rather than
+before is that the pool composition question has been settled — the earlier
+concern that B's headline number "would not survive the taskset fix" no longer
+applies.
+
+**What not to do.** Do not pick a curriculum mix by level alone. Family matters
+far more than level, and a nominal L2/L3 mix can contain anything from a
+near-unsolvable family to a 73%-pass family depending on which tasks the seed
+draws. Choose on family composition, targeting families near p = 0.5.
 
 ---
 
