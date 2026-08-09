@@ -131,6 +131,19 @@ Inference. It receives only the public prompt, candidate source, and first
 diagnostic—not hidden inputs, expected values, or reference code. Disable the
 guide in task configuration if you want a fully self-contained two-turn run.
 
+**The guide needs its credential on disk, not in the environment.** The user
+simulator runs in its own subprocess and `PRIME_API_KEY` is not inherited by
+it; write `~/.prime/config.json` instead (`prime login` does this for you):
+
+```bash
+mkdir -p ~/.prime && printf '{"api_key": "%s"}\n' "$PRIME_API_KEY" > ~/.prime/config.json
+```
+
+Getting this wrong used to fail every third attempt and cost 20–33% of training
+rollouts, reported only as an opaque `JSONDecodeError` from the MCP layer. It
+now degrades to an unguided retry and logs the reason — see
+[PIPELINE_LOG.md](PIPELINE_LOG.md).
+
 ## Choose a candidate runtime
 
 Candidate code runs in one of two places, selected by `runtime`:

@@ -203,6 +203,49 @@ def test_orientation_sensitive_arguments_arrive_as_the_prompt_describes() -> Non
                     assert _octave_shape(right)[0] == 1
 
 
+def test_a_failing_guide_degrades_the_retry_instead_of_killing_the_rollout() -> None:
+    """A guide failure must not propagate out of `respond`.
+
+    It used to. The exception escaped, the MCP layer returned a contentless
+    tool result, and the host reported
+    `JSONDecodeError('Expecting value: line 1 column 1 (char 0)')` -- naming
+    neither the cause nor this file. Measured on 2026-08-09: 23 of 16 rollouts'
+    worth of retry turns lost, and zero once the credential was reachable.
+    """
+    config = octave_environment.OctaveUserConfig(
+        max_attempts=3, guide_enabled=True, octave_runtime="local"
+    )
+    user = octave_environment.OctaveUser(config)
+    # `state` is a read-only property backed by a ContextVar; outside a served
+    # call it falls through to `_inert_state`.
+    user._inert_state = octave_environment.OctaveState(attempts=1)
+    user.task = SimpleNamespace(
+        prompt="Write this GNU Octave function:\n\n    function out = f(x)",
+        cases=[{"args": [1], "expected": 1}],
+    )
+
+    async def boom(*_args, **_kwargs):
+        raise RuntimeError("Guide enabled, but no Prime credential was found")
+
+    async def scored(*_args, **_kwargs):
+        return {"passed": 0, "total": 1, "feedback": "CASE 1 FAIL value"}
+
+    user._guide_hint = boom
+    original = octave_environment.execute_candidate
+    octave_environment.execute_candidate = scored
+    try:
+        reply = asyncio.run(user.respond("```octave\nfunction out=f(x)\nout=x;\nend\n```"))
+    finally:
+        octave_environment.execute_candidate = original
+
+    assert reply, "respond must still return a usable user turn"
+    assert "Guide hint:" not in reply[0]["content"]
+    assert "0/1" in reply[0]["content"], "the ordinary diagnostic must survive"
+    assert "no Prime credential" in user.state.guide_unavailable, (
+        "the reason must be recorded, or a misconfigured run looks healthy"
+    )
+
+
 def test_truncated_code_block_does_not_keep_its_opening_fence() -> None:
     """A generation cut off inside its fence must still yield runnable source.
 

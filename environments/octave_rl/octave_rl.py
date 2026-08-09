@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -25,6 +26,8 @@ from harness import (
 )
 from openai import AsyncOpenAI
 from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """Write GNU Octave functions. Return exactly one fenced `octave`
 code block containing the requested function. Do not return tests, files, prose, or
@@ -190,6 +193,10 @@ async def execute_feedback_in_new_sandbox(
 class OctaveState(vf.State):
     attempts: int = 0
     done: bool = False
+    # Set when the guide was asked for a hint and could not deliver one. The
+    # rollout continues without the hint rather than dying: a missing hint is a
+    # degraded retry, not an invalid one.
+    guide_unavailable: str = ""
 
 
 class OctaveUserConfig(vf.UserConfig):
@@ -340,9 +347,32 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 and self.config.max_attempts >= 3
                 and self.state.attempts == 2
             ):
-                content += "\nGuide hint: " + await self._guide_hint(
-                    code or "(no valid function submitted)", result["feedback"]
-                )
+                # A guide failure must not kill the rollout. It used to: the
+                # exception escaped `respond`, and the MCP layer turned it into
+                # a contentless tool result that the host reported as
+                # `JSONDecodeError('Expecting value: line 1 column 1')` --
+                # naming neither the cause nor this file. The common trigger is
+                # a missing credential, because `PRIME_API_KEY` is *not*
+                # inherited by the user-server subprocess; see the 2026-08-09
+                # PIPELINE_LOG entry. Degrade to an unguided retry and record
+                # why, so a misconfigured run is visible instead of silently
+                # losing every third turn.
+                try:
+                    hint = await self._guide_hint(
+                        code or "(no valid function submitted)", result["feedback"]
+                    )
+                except Exception as exc:  # noqa: BLE001 - any guide failure degrades
+                    self.state.guide_unavailable = f"{type(exc).__name__}: {exc}"
+                    logger.warning(
+                        "Guide hint unavailable (%s); continuing without it. "
+                        "If this is a credential error, note that PRIME_API_KEY "
+                        "is not inherited by the user-server subprocess -- write "
+                        "it to ~/.prime/config.json instead.",
+                        self.state.guide_unavailable,
+                    )
+                else:
+                    if hint:
+                        content += "\nGuide hint: " + hint
         return [{"role": "user", "content": content}]
 
 

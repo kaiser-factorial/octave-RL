@@ -30,9 +30,11 @@ entry is worth having.
 
 ---
 
-## 2026-08-09 — The user-server error reproduces on CPU for pennies; five causes eliminated, root cause still open
+## 2026-08-09 — The user-server error was a missing guide credential, hidden by the MCP layer
 
-**Status: UNRESOLVED.** Recorded so the eliminations do not have to be redone.
+**Status: RESOLVED.** Root cause, discriminating experiment, and fix below; the
+eliminations that preceded them are kept because they are what made the
+discriminating experiment obvious.
 
 **Symptom.** `UserError: user server at http://127.0.0.1:PORT/mcp respond
 failed: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')`, on 20-33%
@@ -85,9 +87,51 @@ not obviously drift); reading the user-server subprocess's own stderr, which is
 discarded by the worker and is the most likely place the real exception is
 being lost.
 
-**Interim mitigation, not a fix.** `max_attempts = 1, guide_enabled = false`
-avoids the path entirely and is what every hosted eval already uses. A training
-run needs the retry path, so this is not available there.
+**The discriminating experiment.** Vary attempts against guide, everything else
+held fixed. `respond` is called once at `max_attempts = 2` and twice at 3, and
+the guide only fires on the second call:
+
+| max_attempts | guide_enabled | UserErrors (16 rollouts) |
+|---:|---|---:|
+| 2 | false | 0 |
+| 2 | true | 0 — the guide cannot fire below 3 |
+| 3 | false | **0** — three turns, no guide, clean |
+| 3 | true | **23** |
+
+Only the guide cell fails, and a three-turn rollout without the guide is clean.
+So it is neither "the third turn" nor the retry path.
+
+**Root cause.** `PRIME_API_KEY` **is not inherited by the user-simulator
+subprocess.** `_prime_api_key()` raises `RuntimeError("Guide enabled, but no
+Prime credential was found...")`, that exception escapes `respond`, and the MCP
+layer converts it into a tool result with no parseable text. The host reports
+that as `JSONDecodeError('Expecting value: line 1 column 1 (char 0)')` —
+mentioning neither the credential, nor the guide, nor this package. **The
+environment's own error message was accurate and specific; the transport
+destroyed it.** That is why the earlier isolated guide test passed: it ran in a
+shell where the variable *was* set.
+
+Confirmed both ways on the same config: writing `~/.prime/config.json` (the
+fallback `_prime_api_key` already supported) took 23 errors to **0**, and the
+fix below takes them to **0** with the credential still unreachable.
+
+**Fix.** Two parts, since either alone leaves a trap:
+1. A guide failure now degrades to an **unguided retry** rather than ending the
+   rollout — it warns and records the reason in `state.guide_unavailable`. A
+   missing hint is a degraded retry, not an invalid one.
+2. Both READMEs state that the credential must be reachable **on disk**, not
+   merely exported. `prime login` writes that file, so an interactive machine
+   works; a pod or sandbox carrying only the environment variable does not.
+
+Verified in the real MCP path with the credential deliberately unreachable: 0
+`UserError`, 16/16 rollouts complete, 5 reaching turn 3.
+`test_a_failing_guide_degrades_the_retry_instead_of_killing_the_rollout` locks
+it in.
+
+**Why it survived.** Every hosted evaluation this project has run used
+`max_attempts = 1, guide_enabled = false`, so the guide path ran only inside
+GPU training, where an opaque 20-33% error rate was easy to read as
+infrastructure flakiness. The misleading `JSONDecodeError` did the rest.
 
 **Blast radius.** No published evaluation number: none of them use the retry
 path. It costs training rollouts, and not uniformly — the failures land on

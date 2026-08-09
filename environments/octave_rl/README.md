@@ -262,9 +262,29 @@ runs the submitted function after each attempt and reports back:
 The guide defaults to `Qwen/Qwen3.5-35B-A3B` through Prime Inference. It sees
 the public task prompt, the candidate source, and the first diagnostic only —
 never hidden inputs, expected values, or the reference implementation.
-Credentials are read at runtime from `PRIME_API_KEY` or the authenticated local
-Prime config and are never written into traces or package configuration. Set
+Credentials are never written into traces or package configuration. Set
 `guide_enabled = false` for a fully self-contained run with no external calls.
+
+> **Credential note — read this before enabling the guide.** The user simulator
+> runs in its **own subprocess**, and `PRIME_API_KEY` **is not inherited by
+> it**. Exporting the variable in the shell that launches training or eval is
+> not enough. Write the credential where the subprocess can read it:
+>
+> ```bash
+> mkdir -p ~/.prime && printf '{"api_key": "%s"}\n' "$PRIME_API_KEY" > ~/.prime/config.json
+> ```
+>
+> `prime login` produces that file already, so an interactively authenticated
+> machine works out of the box; a pod or sandbox that only has the environment
+> variable does not. Measured on 2026-08-09: with the credential unreachable,
+> the guide turn failed on every third attempt, which cost 20–33% of rollouts
+> in a training run.
+>
+> Since 0.3.1 a guide failure **degrades to an unguided retry** instead of
+> ending the rollout, logs a warning, and records the reason in
+> `state.guide_unavailable`. So a misconfigured run now loses hints rather than
+> rollouts — but it is still misconfigured, and the hints are what attempt 3 is
+> for.
 
 ## Scoring boundary
 
@@ -319,6 +339,16 @@ point. It is native `verifiers.v1` throughout and does not mix in the legacy v0
 - Verifiers: `>=0.2.1,<0.3` · NumPy: `>=2.0,<3`
 - Each task is fully determined by `(level, seed, task index)`.
 - Six hidden cases per task, generated with NumPy and stored with the task.
+
+## Changes in 0.3.1
+
+- A guide failure no longer ends the rollout. It previously raised out of
+  `respond`, and the MCP layer turned that into a contentless tool result the
+  host reported as `JSONDecodeError('Expecting value: line 1 column 1')` --
+  naming neither the cause nor this package. It now degrades to an unguided
+  retry, warns, and records the reason in `state.guide_unavailable`.
+- Documented that `PRIME_API_KEY` is **not** inherited by the user-simulator
+  subprocess; use `~/.prime/config.json`. See the credential note above.
 
 ## Changes in 0.3.0
 
