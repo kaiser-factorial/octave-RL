@@ -30,6 +30,50 @@ entry is worth having.
 
 ---
 
+## 2026-08-09 — Retries buy execution, not solutions, and a reward is not portable across turn budgets
+
+**Measurement.** Nemotron-3-Nano at both turn budgets, all three levels, 1,536
+rollouts, identical tasks and seed (`artifacts/nemotron-postfix-20260809/`).
+
+| level | reward, 1 -> 3 turns | solve rate, 1 -> 3 turns |
+|---|---|---|
+| L1 | 0.573 -> 0.778 (**+0.205**) | 0.570 -> 0.602 (+0.031) |
+| L2 | 0.517 -> 0.690 (**+0.173**) | 0.504 -> 0.484 (-0.020) |
+| L3 | 0.312 -> 0.481 (**+0.169**) | 0.309 -> 0.312 (+0.004) |
+
+**Reward moves by up to +0.205 while solve rate does not move at all.**
+
+**Mechanism.** Reward is the hidden-case fraction discounted 0.85 on attempt 2
+and 0.60 on attempt 3, so partial credit accrues across retries. What the retry
+loop actually improves is *execution*: 0.736 -> 0.900 (L1), 0.644 -> 0.840 (L2),
+0.548 -> 0.695 (L3). A rollout going from "throws on every case" to "runs and
+passes three of six" earns real reward without becoming a solution. Solve rate,
+which counts only all-six-pass, sees none of it.
+
+The diagnostic feedback teaches the model to emit *runnable* Octave. It does not
+teach it the algorithm — consistent with the 2026-08-08 taxonomy putting
+"can the model emit runnable Octave" first and "is the algorithm correct" last.
+
+**Consequence: a reward number is not portable across turn budgets.** Every
+hosted evaluation in this repository used `max_turns = 1`; the training scaffold
+uses 3. The 4B smoke's 0.925 and the eval's 0.400 on the same cell are both
+correct and not comparable. **Report `solve_rate` at a stated turn budget when
+the question is whether the policy got better at Octave.**
+
+**Not a finding: the per-family deltas.** Largest are +0.042 and -0.056 at
+n ~ 72, where SE is about 0.06. Solve rate cannot genuinely fall with more
+attempts, since a solved rollout stops; the negatives are sampling variance.
+The near-zero aggregate is the result.
+
+**Why it survived.** The three-turn cell had never been measured for any model
+outside GPU training, because the guide credential was broken until the same
+morning — so the two budgets had never been compared on identical tasks.
+
+**Residual risk.** One model. Whether the same holds for a policy *being
+trained* — where retries also shape what the gradient sees — is untested.
+
+---
+
 ## 2026-08-09 — "Truncation" in the trainer means ran-out-of-turns, not ran-out-of-tokens
 
 **Symptom.** The 0.8B smoke reported **81-89% truncation** where the hosted eval
