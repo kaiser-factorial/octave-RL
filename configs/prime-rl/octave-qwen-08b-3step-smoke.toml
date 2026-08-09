@@ -11,10 +11,20 @@
 # 1.44 -- close to independent, against 4B's 2.15 -- so a bigger group buys
 # nearly what the theory predicts, taking that to roughly 0.52 at g=8.
 #
-# `group_size` and `max_inflight_rollouts` are DIFFERENT knobs and were once
-# conflated. The CUDA illegal-memory failures on this SM89 host came from 7-8
-# *simultaneous generations*, which `max_inflight_rollouts` bounds; it stays at
-# 2. `group_size` only says how many rollouts share a task's advantage.
+# On group_size vs max_inflight_rollouts: prime-rl **enforces
+# `max_inflight_rollouts >= group_size`** and refuses to start otherwise
+# ("Value error, max_inflight_rollouts must be at least the number of rollouts
+# per example"). The 2026-08-08 handoff advice to "raise group_size to 4-8 while
+# holding max_inflight_rollouts = 2" is therefore not runnable. They are
+# distinct knobs but not independent ones.
+#
+# That collides with a known hazard: the CUDA illegal-memory failures on this
+# SM89 host came from 7-8 simultaneous long generations of Qwen3.5-**4B**.
+# group_size 8 forces 8 simultaneous generations. We take that risk knowingly
+# here because 0.8B is a fifth the size with a shorter p95 completion (695
+# tokens against 4B's 825), so the memory pressure that produced those faults
+# is far lower. If this run dies with an illegal memory access, that is the
+# answer, and the fallback is group_size 4 / max_inflight 4.
 #
 # Deliberately matched to the historical 20-step run where it does not conflict
 # with a known hazard, so a later comparison is apples-to-apples: Level 1 only,
@@ -56,7 +66,7 @@ language_model_attr = "model.language_model"
 [orchestrator]
 batch_size = 16
 group_size = 8
-max_inflight_rollouts = 2
+max_inflight_rollouts = 8
 collect_inference_metrics = false
 
 [orchestrator.renderer]

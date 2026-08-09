@@ -30,6 +30,107 @@ entry is worth having.
 
 ---
 
+## 2026-08-09 — "Truncation" in the trainer means ran-out-of-turns, not ran-out-of-tokens
+
+**Symptom.** The 0.8B smoke reported **81-89% truncation** where the hosted eval
+had measured the same model at **2.5%**. Two plausible fixes were tried and both
+were wrong, in instructive ways.
+
+**Two wrong hypotheses, both falsified on hardware.**
+
+1. *The trainer's sequence cap.* The config carries `seq_len = 4096` against
+   `max_total_tokens = 6144` — a genuine inconsistency, since the rollout may
+   generate more than the trainer ingests. Raising `seq_len` to 8192 changed
+   truncation from 88.9/87.5/81.2 to 87.5/81.2/87.5. **No effect.**
+2. *The conversation budget.* Raising `max_total_tokens` from 6144 to 10240 took
+   truncation **up**, to 75.0/93.8/100.0, with mean turns rising 2.8 → 3.0.
+
+**Root cause — it is a naming collision, not a defect.** `Trace.is_truncated`
+in verifiers is:
+
+```python
+if self.stop_condition in ("max_turns", "max_input_tokens", "max_output_tokens",
+                           "max_total_tokens", "context_length", "harness_timeout"):
+    return True
+last = next((c for c in reversed(self.calls) if c.error is None), None)
+return bool(last and last.finish_reason == "length")
+```
+
+**`max_turns` counts as truncated.** So a rollout that used all three attempts
+without solving is "truncated" regardless of length. At a 0.078 solve rate,
+almost every 0.8B rollout exhausts its attempts, so 85% truncation is a
+restatement of the solve rate. It also explains hypothesis 2 going the wrong
+way: a larger budget lets *more* rollouts reach attempt 3 instead of stopping
+early on length, which raises the `max_turns` share.
+
+**The conflation to avoid.** Two different quantities travel under one word:
+
+| | what it counts | 0.8B | 2B | 4B |
+|---|---|---:|---:|---:|
+| trainer `Truncation` | rollouts ending on `max_turns` *or* a length finish | ~85% | — | 0-25% |
+| per-call `finish_reason == "length"` | generations that actually hit the token cap | 2.5% | 10.0% | 3.0% |
+
+An earlier session summary put these side by side as if comparable. They are
+not. **For "is the token cap binding", use the per-call figure.** By that
+measure only 2B has a problem — its p95 completion sits at the 1,536 cap.
+Raising tokens for 0.8B buys nothing, and was measured not to.
+
+**Blast radius.** No published number. It nearly caused a pointless token-budget
+change to the training config, and it made a healthy 0.8B run look broken.
+
+**Why it survived.** The trainer prints a single word for a compound condition,
+and the environment's own eval path reports the token sense under the same name.
+Nobody had run a model that exhausts its attempts often enough for the two to
+diverge — 4B solves in 1.5 turns and never showed it.
+
+**Fix.** Documentation only; both metrics are correct as implemented. Report
+solve rate beside truncation, and say which truncation is meant.
+
+**Residual risk.** `seq_len = 4096` < `max_total_tokens = 6144` remains a real
+inconsistency in every prime-rl config here, and is untested at 3 attempts with
+a model that fills its budget. It did not matter at these lengths; it may at
+longer ones.
+
+## 2026-08-09 — Two self-inflicted debugging wounds: pkill matching its own shell, and a redirect the caller cannot write
+
+**Symptom.** Twice during the 0.8B smoke a relaunch appeared to succeed while
+the log sat frozen at an old timestamp, and the stale contents were read as
+fresh evidence. Roughly twenty minutes of pod time went to it.
+
+**Root cause 1 — `pkill -f` matched the command that invoked it.**
+
+```bash
+ssh host 'pkill -f "uv run rl"; ... nohup uv run rl @ config &'
+```
+
+`pkill -f` matches against the *full command line*, and the remote shell's own
+`bash -c` string contains `uv run rl`. It killed itself before reaching the
+relaunch, and the previous log — with the previous error — was still on disk. It
+then happened a second time with a different pattern (`entrypoints`), which was
+also present in the invoking command.
+
+**Root cause 2 — a redirect evaluated by the wrong user.** In
+`sudo nohup script > /workspace/train.log`, the redirect is performed by the
+*calling* shell, not by `sudo`. The log was root-owned from an earlier run, the
+caller was `ubuntu`, and the open failed — so the command produced no output and
+changed nothing, while the stale file continued to look like the current run.
+
+**Fix / practice.**
+- Never `pkill -f` on a pattern that appears in the command doing the killing.
+  Match something narrower than the invocation (a binary path, a pidfile), or
+  read a pid from a file.
+- Put the redirect inside the privileged shell — `sudo sh -c "cmd > log 2>&1 &"`
+  — or write to a path the caller owns.
+- **Check the log's mtime before reading it as evidence.** Both incidents would
+  have been caught in one second by `ls -l --time-style=+%H:%M:%S`. A log that
+  did not change is not a log that says nothing happened; it is a log that was
+  never written.
+
+**Blast radius.** Wall-clock and about $0.50 of pod time. No result affected —
+both were caught before any number was recorded.
+
+---
+
 ## 2026-08-09 — The user-server error was a missing guide credential, hidden by the MCP layer
 
 **Status: RESOLVED.** Root cause, discriminating experiment, and fix below; the

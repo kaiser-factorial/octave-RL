@@ -130,32 +130,39 @@ Both host-side validators pass 9,000/9,000 on the pinned interpreter with real
 
 ### The next experiment
 
-**The user-server error is solved.** It was the guide credential:
-`PRIME_API_KEY` is not inherited by the user-simulator subprocess, so
-`_prime_api_key()` raised, the exception escaped `respond`, and the MCP layer
-reported it as an opaque `JSONDecodeError`. Discriminating experiment: three
-turns *without* the guide is clean, three turns *with* it fails. A guide
-failure now degrades to an unguided retry and records the reason; put the
-credential in `~/.prime/config.json`, not just the environment. Verified at 0
-errors across 384 rollouts in the configuration that used to fail. Full entry in
-`PIPELINE_LOG.md`.
+**0.8B has passed a 3-step smoke at `group_size = 8`** —
+`artifacts/training/qwen-08b-3step-20260809/`, 64 minutes, ~$1.60.
 
-**Model size is now an open choice, and 4B may be the wrong one.** 4B was
-picked as the smallest Qwen with nonzero reward on a taskset where whole
-families were unsolvable regardless of model. Measured on the repaired taskset
-in the actual training configuration (Level 1, three attempts, guide, 256
-rollouts each; `artifacts/smaller-models-20260809/`):
+| step | reward | trainable | turns | errors | truncation |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 0.1778 | 8/16 (50%) | 2.8 | **0.0%** | 88.9% |
+| 2 | 0.1250 | 8/16 (50%) | 2.8 | **0.0%** | 87.5% |
+| 3 | 0.2250 | **16/16 (100%)** | 2.6 | **0.0%** | 81.2% |
 
-| model | reward | solve rate | exec | format_ok | trunc | degenerate g=4 | cost |
-|---|---:|---:|---:|---:|---:|---:|---|
-| Qwen3.5-0.8B | 0.107 | 0.078 | 0.171 | **0.64** | **2.5%** | 0.781 | 1/5 of 4B |
-| Qwen3.5-2B | 0.128 | 0.086 | 0.243 | 0.59 | 10.0% | 0.719 | 1/2 of 4B |
-| Qwen3.5-4B | 0.641 | 0.328 | 0.816 | 0.92 | 3.0% | 0.500 | — |
+Zero `UserError` — the guide fix holds under training, where the 4B smoke lost
+20-33% of rollouts. Group economics work: 50-100% of groups carry gradient
+against 4B's collapse to 16.7%. No CUDA fault at 8 concurrent generations.
 
-n = 128 per model. **Always report truncation** with these — 2B's p95 sits at
-the 1,536 cap while 0.8B and 4B do not come close, and nobody noticed until it
-was asked for. Thinking is off, verified from traces (zero reasoning tokens in
-989 calls).
+**Three corrections this run produced, all in `PIPELINE_LOG.md`:**
+
+1. **`max_inflight_rollouts >= group_size` is enforced by prime-rl.** The
+   2026-08-08 advice to raise `group_size` while holding
+   `max_inflight_rollouts = 2` is not runnable.
+2. **The trainer's "Truncation" counts `max_turns`, not just token limits.** At
+   a 0.078 solve rate it restates the solve rate. Raising `max_total_tokens` to
+   10240 made it *worse* (100% at step 3) and raising `seq_len` to 8192 changed
+   nothing. Do not raise the token budget for 0.8B; by the token measure it
+   truncates 2.5% against 2B's 10.0%.
+3. `seq_len = 4096` against `max_total_tokens = 6144` is a real inconsistency in
+   every config here. Harmless at these lengths; set `seq_len = 8192` for a
+   longer run, which was tested and costs nothing.
+
+**So the next run is the 20-step continuation on 0.8B**, Level 1,
+`group_size = 8`, promotion gated on the validation split, generalization split
+read once at the end. Watch `format_ok` (0.64 at baseline): if RL lifts it
+quickly this is a good curriculum; if it plateaus, the run is measuring fence
+discipline rather than Octave.
+
 
 **Recommended: Qwen3.5-0.8B on Level 1 at `group_size >= 8`.** It is cheapest
 by 5x, has the best formatting and the least truncation of the three, and has
