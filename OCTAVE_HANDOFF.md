@@ -146,19 +146,33 @@ families were unsolvable regardless of model. Measured on the repaired taskset
 in the actual training configuration (Level 1, three attempts, guide, 256
 rollouts each; `artifacts/smaller-models-20260809/`):
 
-| model | reward | execution | format_ok | training cost |
-|---|---:|---:|---:|---|
-| Qwen3.5-0.8B | 0.107 | 0.171 | 0.64 | 1/5 of 4B |
-| Qwen3.5-2B | **0.128** | 0.243 | 0.59 | 1/2 of 4B |
-| Qwen3.5-4B | 0.641 | 0.816 | 0.92 | — |
+| model | reward | solve rate | exec | format_ok | trunc | degenerate g=4 | cost |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Qwen3.5-0.8B | 0.107 | 0.078 | 0.171 | **0.64** | **2.5%** | 0.781 | 1/5 of 4B |
+| Qwen3.5-2B | 0.128 | 0.086 | 0.243 | 0.59 | 10.0% | 0.719 | 1/2 of 4B |
+| Qwen3.5-4B | 0.641 | 0.328 | 0.816 | 0.92 | 3.0% | 0.500 | — |
 
-Both smaller models sit inside the 10-35% starting band on Level 1, where 4B no
-longer does. **Recommended: Qwen3.5-2B on Level 1**, or stay on 4B and move to
-an L2/L3 mix. What limits the small models is formatting and basic fluency
-(`format_ok` near 0.6), not algorithm choice — which is the competency this
-environment teaches best, but also means a large share of the gradient would go
-to fence discipline. One 3-step smoke on 2B (~$1) would settle whether that
-headroom is reachable.
+n = 128 per model. **Always report truncation** with these — 2B's p95 sits at
+the 1,536 cap while 0.8B and 4B do not come close, and nobody noticed until it
+was asked for. Thinking is off, verified from traces (zero reasoning tokens in
+989 calls).
+
+**Recommended: Qwen3.5-0.8B on Level 1 at `group_size >= 8`.** It is cheapest
+by 5x, has the best formatting and the least truncation of the three, and has
+the lowest rollout correlation (dispersion 1.44 against 4B's 2.15), so a larger
+group buys close to what theory predicts.
+
+The catch is the group size, and it is not optional: read the band on **solve
+rate**, not on the fractional reward, and 0.078 leaves 78% of groups
+gradient-free at g=4 — the pathology the taskset repair removed, reintroduced by
+model choice. At g=8 with near-independent rollouts that falls to roughly 0.52.
+2B buys +0.008 solve rate for twice the price, worse formatting and 4x the
+truncation; if 0.8B stalls, go to 4B on L2/L3 rather than 2B on L1.
+
+What limits the small models is formatting and basic fluency, not algorithm
+choice — the competency this environment teaches best, but also the reason much
+of the early gradient would go to fence discipline. One 3-step smoke on 0.8B at
+`group_size = 8` (~$1) settles it.
 
 *Correction to the 3-step smoke:* it reported 0.9250 for 4B on Level 1; at
 n=256 the same cell is **0.641**. The smoke's batches were 8-12 rollouts. Level

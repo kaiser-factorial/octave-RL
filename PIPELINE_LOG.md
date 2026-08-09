@@ -133,6 +133,40 @@ it in.
 GPU training, where an opaque 20-33% error rate was easy to read as
 infrastructure flakiness. The misleading `JSONDecodeError` did the rest.
 
+**How the diagnosis went wrong, in order.** Worth recording, because four of
+these are reusable mistakes rather than facts about this bug.
+
+1. **One "elimination" above is a false negative, and it was nearly fatal.**
+   "`OctaveUser.respond` raising — 16/16 OK" is the row that should have led
+   straight to the answer and instead ruled it out. `respond` *does* raise —
+   but only when the credential is missing, and the in-process test ran in a
+   shell where `PRIME_API_KEY` was exported. **The test reproduced everything
+   about the failing path except the one condition that causes it.** A negative
+   result from a harness that does not reproduce the environment is not an
+   elimination; it only looks like one.
+2. **The error message pointed at the wrong layer and I followed it.** The
+   `JSONDecodeError` is raised at `launch.py:491` by `json.loads` on an empty
+   string, so hours went into "why is the payload empty" — transport, size,
+   concurrency, timeouts — when the payload was empty *because the server-side
+   call had already failed*. An exception that is re-raised after crossing a
+   process boundary describes the boundary, not the cause.
+3. **Instrumentation that never fired was read as "not this line" when it meant
+   "not this process".** Three patched runs printed nothing while errors
+   continued. The conclusion drawn at the time — that the workers load a
+   different copy of the module — was wrong; the prints were going to a
+   subprocess stderr that the worker discards. Silence from instrumentation is
+   evidence about the instrument first.
+4. **Two "worse at lower concurrency" and "unchanged at smaller payload"
+   results were both correct and both useless**, because the real variable was
+   never in either experiment. Varying the wrong axis produces clean,
+   trustworthy, irrelevant numbers.
+5. **The discriminating experiment took four minutes and should have been
+   first.** attempts x guide, everything else fixed. It was available from the
+   moment the symptom was known to be retry-only; the config knob that isolates
+   the guide (`max_attempts` >= 3) is stated in the code that implements it.
+   Prefer the 2x2 over the deep dive when two configuration flags bound the
+   suspect region.
+
 **Blast radius.** No published evaluation number: none of them use the retry
 path. It costs training rollouts, and not uniformly — the failures land on
 multi-turn rollouts, which are the harder tasks, so the loss is biased toward
@@ -196,9 +230,12 @@ environment log's task indices back through `build_tasks`, which is the only
 sound check: retained rollout blobs are tokenized, so grepping them for family
 names finds nothing whether or not the holdout leaked.
 
-**Residual risk.** The user-server failure is uncharacterised. It could be the
-guide call timing out, the MCP subprocess dying, or a port collision; nothing
-here distinguishes them.
+**Residual risk.** *(Superseded the same day.)* The user-server failure was the
+guide credential: `PRIME_API_KEY` is not inherited by the user-simulator
+subprocess. See "The user-server error was a missing guide credential, hidden by
+the MCP layer". The Level 1 saturation finding in this entry stands, though its
+magnitude was later corrected from 0.9250 to 0.641 at n=256 — see
+`artifacts/smaller-models-20260809/`.
 
 ---
 
