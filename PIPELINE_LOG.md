@@ -30,6 +30,72 @@ entry is worth having.
 
 ---
 
+## 2026-08-09 — The user-server error reproduces on CPU for pennies; five causes eliminated, root cause still open
+
+**Status: UNRESOLVED.** Recorded so the eliminations do not have to be redone.
+
+**Symptom.** `UserError: user server at http://127.0.0.1:PORT/mcp respond
+failed: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')`, on 20-33%
+of rollouts in the 2026-08-09 training smoke, only on retry turns. A rollout
+that hits it twice ends `stop=UserError` with reward 0.000.
+
+**The most useful finding: it needs no GPU.** It reproduces on a 4-core CPU
+Sandbox in about three minutes for a few cents, with an ordinary eval config
+whose only unusual settings are `max_attempts = 3, guide_enabled = true`:
+
+```toml
+task = { octave_runtime = "local", user = { octave_runtime = "local",
+         max_attempts = 3, guide_enabled = true,
+         guide_model = "Qwen/Qwen3.5-35B-A3B" } }
+```
+
+24 rollouts produce 47-59 `UserError` lines. **Every hosted evaluation this
+project has ever run used `max_attempts = 1, guide_enabled = false`**, which is
+exactly why the retry path was never exercised outside a GPU run and why this
+surfaced only now. Any future work on this bug should use the CPU repro.
+
+**Eliminated, each by direct measurement:**
+
+| hypothesis | test | result |
+|---|---|---|
+| local executor flaky under load | 160 executions at concurrency 4 | 0 failures, p50 0.35s |
+| guide model API failing | 24 concurrent calls, same params as `_guide_hint` | 0 failures, p50 1.0s |
+| `OctaveUser.respond` raising | called in-process, both retry turns, all 8 trained families | 16/16 OK, guide fired |
+| concurrency | same config at `max_concurrent = 1` | **worse**: 59 errors vs 7 |
+| payload size | feedback slice cut from 1400 to 120 chars | unchanged: 47 errors |
+| client timeout | `MCP_TIMEOUT` is `httpx.Timeout(600.0)`; failures land at 5-9s | ruled out |
+
+**Where it fails.** `verifiers/v1/mcp/launch.py:491`,
+`data = json.loads("\n".join(texts))`, where `texts` collects the `text`
+blocks of the `CallToolResult`. The reported `JSONDecodeError` therefore does
+not mean malformed JSON — it means the joined text was **empty**, i.e. the tool
+result carried nothing parseable. The client turns that into a decode error,
+which sends the reader looking in the wrong place; that misdirection cost most
+of the time spent here.
+
+**What is still unknown.** Whether `texts` is empty (no blocks) or holds a
+single empty string. Instrumenting `launch.py` in the sandbox to print either
+case produced **no output at all across three runs while errors continued**,
+which suggests the rollout subprocess workers execute a copy of that module
+other than the one patched, or the raise happens on a path the patch did not
+cover. That is the next thread to pull.
+
+**Not attempted.** Pinning `mcp` (1.29.0 both locally and in the sandbox, so
+not obviously drift); reading the user-server subprocess's own stderr, which is
+discarded by the worker and is the most likely place the real exception is
+being lost.
+
+**Interim mitigation, not a fix.** `max_attempts = 1, guide_enabled = false`
+avoids the path entirely and is what every hosted eval already uses. A training
+run needs the retry path, so this is not available there.
+
+**Blast radius.** No published evaluation number: none of them use the retry
+path. It costs training rollouts, and not uniformly — the failures land on
+multi-turn rollouts, which are the harder tasks, so the loss is biased toward
+the part of the reward distribution that carries the most signal.
+
+---
+
 ## 2026-08-09 — The repaired Level 1 is too easy to train on, and the user server fails on retry turns
 
 **Symptom.** First 3-step smoke against the repaired taskset (0.3.0, 8-family
