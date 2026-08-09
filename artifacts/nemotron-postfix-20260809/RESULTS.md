@@ -1,84 +1,105 @@
-# Nemotron on the repaired taskset, at both turn budgets — 2026-08-09
+# Nemotron across turn budgets on the repaired taskset — 2026-08-09
 
-Nemotron-3-Nano-30B-A3B-BF16, all three levels, at `max_turns = 1` and
-`max_turns = 3`. The three-turn cell has never been measurable for this model:
-the guide credential was broken until this morning, so any earlier attempt
-would have lost a fifth of its rollouts to `UserError`.
+Nemotron-3-Nano-30B-A3B-BF16, all three levels, at `max_turns` 1, 2 and 3.
+The multi-turn cells had never been measurable for any model outside GPU
+training: the guide credential was broken until this morning.
+
+> **Correction, same day.** An earlier version of this document concluded that
+> retries raise reward without raising solve rate. That was wrong. "Solve" had
+> been computed from `rewards.case_fraction`, the *discounted* reward — a
+> correct answer earns 0.85 on attempt 2 and 0.60 on attempt 3, so the measure
+> could not count a solve that arrived after the first attempt, which is exactly
+> the population in question. The right field is `raw_case_fraction`, which the
+> environment already reports. Everything below uses it. See `PIPELINE_LOG.md`,
+> entry "RETRACTED: retries buy execution, not solutions".
 
 ## Setup
 
 32 tasks per level, 8 rollouts, seed `20260808`, T = 1.0, thinking off,
 1,536-token cap, scored against pinned GNU Octave 10.2.0 under `unshare --net`.
-**1,536 rollouts, zero infrastructure errors, no GPU.** One CPU Sandbox,
-about $0.35 all in.
+**2,304 rollouts, zero infrastructure errors, no GPU**, about $0.5 all in.
 
-Single-turn cells use `guide_enabled = false`; three-turn cells enable the
-guide (`Qwen/Qwen3.5-35B-A3B`) before attempt 3.
+One- and two-turn cells run `guide_enabled = false`; at `max_attempts = 2` the
+guide cannot fire anyway (the code requires 3), so the 1→2 hop isolates the
+diagnostic and 2→3 isolates the hint.
 
-## The result
+## Retries are among the most effective things in the environment
 
-| cell | reward | solve | execution | format_ok | token trunc | mean turns |
-|---|---:|---:|---:|---:|---:|---:|
-| 1 turn, L1 | 0.573 | 0.570 | 0.736 | 0.98 | 0.0% | 1.00 |
-| 1 turn, L2 | 0.517 | 0.504 | 0.644 | 0.97 | 0.4% | 1.00 |
-| 1 turn, L3 | 0.312 | 0.309 | 0.548 | 0.99 | 0.4% | 1.00 |
-| 3 turns, L1 | **0.778** | 0.602 | 0.900 | 0.99 | 0.0% | 1.65 |
-| 3 turns, L2 | **0.690** | 0.484 | 0.840 | 0.99 | 0.0% | 1.85 |
-| 3 turns, L3 | **0.481** | 0.312 | 0.695 | 0.99 | 0.5% | 2.24 |
+| level | turns | reward | **solve rate** | execution | mean turns |
+|---|---:|---:|---:|---:|---:|
+| L1 | 1 | 0.573 | 0.570 | 0.736 | 1.00 |
+| L1 | 2 | 0.704 | **0.723** | 0.820 | 1.43 |
+| L1 | 3 | 0.778 | **0.828** | 0.900 | 1.65 |
+| L2 | 1 | 0.517 | 0.504 | 0.644 | 1.00 |
+| L2 | 2 | 0.676 | **0.688** | 0.783 | 1.43 |
+| L2 | 3 | 0.690 | **0.750** | 0.840 | 1.85 |
+| L3 | 1 | 0.312 | 0.309 | 0.548 | 1.00 |
+| L3 | 2 | 0.408 | **0.422** | 0.644 | 1.69 |
+| L3 | 3 | 0.481 | **0.527** | 0.695 | 2.24 |
 
-**Reward rises by +0.169 to +0.205. Solve rate moves by −0.020 to +0.031.**
+**Solve rate rises 22–26 points from one turn to three** (+0.258, +0.246,
++0.219). Execution rises alongside it, monotonically at every level. Of hinted
+rollouts that rewrote their function, **21.6% went on to fully solve**.
 
-| level | reward | solve |
-|---|---|---|
-| L1 | 0.573 → 0.778 (**+0.205**) | 0.570 → 0.602 (+0.031) |
-| L2 | 0.517 → 0.690 (**+0.173**) | 0.504 → 0.484 (−0.020) |
-| L3 | 0.312 → 0.481 (**+0.169**) | 0.309 → 0.312 (+0.004) |
+The split across the two hops:
 
-## What the retry loop actually buys
+| level | 1→2 (diagnostic only) | 2→3 (adds the hint) |
+|---|---:|---:|
+| L1 | +0.153 | +0.105 |
+| L2 | +0.184 | +0.062 |
+| L3 | +0.113 | +0.105 |
 
-Not solutions — **execution**. The fraction of hidden cases that run without
-raising goes 0.736 → 0.900 (L1), 0.644 → 0.840 (L2), 0.548 → 0.695 (L3).
+Both hops earn their place. The first retry is worth more than the second, as
+you would expect from a declining-returns process, but neither is decoration.
 
-The mechanism is straightforward once separated: reward is the fraction of
-hidden cases passed, discounted 0.85 on attempt 2 and 0.60 on attempt 3, so
-partial credit accrues across retries. A rollout that goes from "throws on
-every case" to "runs and passes three of six" earns real reward without ever
-becoming a solution. Solve rate, which counts only all-six-pass, sees none of
-that.
+## Reward is not a capability measure when the turn budget varies
 
-So the diagnostic feedback teaches Nemotron to produce *runnable* Octave. It
-does not teach it the algorithm.
+This is the durable lesson. `case_fraction` multiplies correctness by an
+attempt discount, so it mixes *how well* with *how much help*. Across a fixed
+turn budget it is a fine training signal. Across different budgets it is not
+comparable, and thresholding it to define "solved" is simply wrong.
 
-**Per-family deltas are noise.** The largest are +0.042 (`sliding_window`,
-`signal_identity`, `reshape_permute`) and −0.056 (`sequence_recurrence`) at
-n ≈ 72 per family, where the standard error is about 0.06. Solve rate cannot
-truly fall with more attempts — a solved rollout stops — so the negative deltas
-are sampling variance and should be read as zero. The aggregate, near zero
-across all ten families, is the real finding.
+**Use `raw_case_fraction` for any claim of the form "the policy got better".**
+The two fields coincide only at one turn, which is why every single-turn
+evaluation in this repository was unaffected — and why the defect survived.
 
-## Why this matters beyond Nemotron
+## Changing what the feedback *says* changed nothing
 
-Any comparison between a one-turn and a three-turn configuration is comparing
-two different measurements, not two capability levels. **A reported reward is
-not portable across turn budgets.** Every hosted evaluation in this repository
-used `max_turns = 1`; the training scaffold uses 3. The 4B smoke's 0.925 and
-the eval's 0.400 on the same cell are both correct and not comparable.
+A paired A/B on the 2-turn cells: identical model, tasks, seed and turn budget,
+`guide_enabled = false`, with the only difference being the rewritten retry
+diagnostic (blob stripped, errors deduplicated, failure mode named).
 
-If the question is "did the policy get better at Octave", the metric is
-`solve_rate`, and it should be reported at a fixed turn budget.
+| level | old feedback | new feedback | delta | paired SE | t |
+|---|---:|---:|---:|---:|---:|
+| L1 | 0.723 | 0.719 | −0.004 | 0.023 | −0.17 |
+| L2 | 0.688 | 0.672 | −0.016 | 0.033 | −0.47 |
+| L3 | 0.422 | 0.441 | +0.020 | 0.039 | +0.51 |
+
+**No effect.** The rewrite is still worth keeping — it cut a six-case syntax
+failure from 1,084 characters to 110, removed an internal protocol blob from the
+model's context, and gave the previously-silent "ran but wrong" case something
+to say — but on this model it buys no additional solves.
+
+Taken with the turn-budget result, that is a specific claim: **the retry
+mechanism is valuable and the retry *content* is not**, at least for a model
+this strong. The obvious explanation is that a retry is mostly another sample
+at T = 1.0, and the diagnostic is close to inert. That is testable and is the
+next experiment on the list.
 
 ## Nemotron against the models being trained
 
-| model | params | format_ok | execution | solve (L1) | token trunc |
+| model | params | format_ok | execution | solve, L1 1-turn | token trunc |
 |---|---|---:|---:|---:|---:|
 | Nemotron-3-Nano | 30B-A3B | **0.98** | 0.736 | 0.570 | 0.0% |
-| Qwen3.5-4B | 4B | 0.92 | 0.816 | 0.328 | 3.0% |
-| Qwen3.5-2B | 2B | 0.59 | 0.243 | 0.086 | 10.0% |
-| Qwen3.5-0.8B | 0.8B | 0.64 | 0.171 | 0.078 | 2.5% |
+| Qwen3.5-4B | 4B | 0.92 | 0.816 | 0.328* | 3.0% |
+| Qwen3.5-2B | 2B | 0.59 | 0.243 | 0.086* | 10.0% |
+| Qwen3.5-0.8B | 0.8B | 0.64 | 0.171 | 0.078* | 2.5% |
 
-Qwen figures are the three-attempt scaffold; Nemotron's solve is single-turn.
-Nemotron would saturate Level 1 immediately — at 0.570 it has less headroom
-than 4B, which was already judged too easy. It is a reference point, not a
+\* Qwen figures come from the 3-attempt scaffold and were computed with the
+flawed discounted measure; they understate solve rate and are pending
+recomputation. Nemotron's is single-turn, where the two measures coincide.
+
+Nemotron would saturate Level 1 immediately. It is a reference point, not a
 training candidate for this cell.
 
 ## Every Nemotron measurement on record
@@ -88,11 +109,14 @@ training candidate for this cell.
 | 2026-08-08 pre-repair | 960 | per-family spread 0.030–0.734; the 24x range that exposed the orientation defect |
 | 2026-08-08 group spread | 768 | 50% of L2 groups unanimous; independence model understated waste 14x |
 | 2026-08-09 post-repair | 768 | +0.162 overall (SE 0.033); `linsolve_tolerance` 0.030 → 0.752; L2 degenerate 50% → 10% |
-| 2026-08-09 turn budgets | 1,536 | this document |
+| 2026-08-09 turn budgets | 2,304 | this document |
+| 2026-08-09 feedback A/B | 768 | rewritten diagnostic: no effect on solve rate |
 
-**4,032 Nemotron rollouts total**, all on pinned Octave 10.2.0, all with
-thinking verified off from traces rather than config.
+**5,568 Nemotron rollouts total**, all on pinned Octave 10.2.0, thinking
+verified off from traces rather than config.
 
 ## Files
 
-- `raw-outputs.tgz` — traces, configs and logs for all six cells.
+- `raw-outputs.tgz` — 1- and 3-turn cells.
+- `two-turn-outputs.tgz` — 2-turn cells (old feedback).
+- `../feedback-rewrite-20260809/raw-outputs.tgz` — 2-turn cells (new feedback).

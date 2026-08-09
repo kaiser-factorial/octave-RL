@@ -30,49 +30,110 @@ entry is worth having.
 
 ---
 
-## 2026-08-09 — Retries buy execution, not solutions, and a reward is not portable across turn budgets
+## 2026-08-09 — The retry loop is worth 22-38 points, and almost none of it is the feedback
 
-**Measurement.** Nemotron-3-Nano at both turn budgets, all three levels, 1,536
-rollouts, identical tasks and seed (`artifacts/nemotron-postfix-20260809/`).
+**Question.** Retries clearly help. Is that because the environment *tells the
+model something*, or just because the model gets another sample at T = 1.0?
 
-| level | reward, 1 -> 3 turns | solve rate, 1 -> 3 turns |
-|---|---|---|
-| L1 | 0.573 -> 0.778 (**+0.205**) | 0.570 -> 0.602 (+0.031) |
-| L2 | 0.517 -> 0.690 (**+0.173**) | 0.504 -> 0.484 (-0.020) |
-| L3 | 0.312 -> 0.481 (**+0.169**) | 0.309 -> 0.312 (+0.004) |
+**Design.** Three cells sharing model, tasks, seed and turn budget; the only
+difference is what the retry message says. Nemotron, 2 turns, guide off, 768
+rollouts per cell, solve rate from `raw_case_fraction`.
 
-**Reward moves by up to +0.205 while solve rate does not move at all.**
+| level | 1 turn | informative diagnostic | just "That answer was not correct." | informative − null | t |
+|---|---:|---:|---:|---:|---:|
+| L1 | 0.570 | 0.719 | **0.688** | +0.031 | 0.98 |
+| L2 | 0.504 | 0.672 | **0.656** | +0.016 | 0.49 |
+| L3 | 0.309 | 0.441 | **0.434** | +0.008 | 0.21 |
 
-**Mechanism.** Reward is the hidden-case fraction discounted 0.85 on attempt 2
-and 0.60 on attempt 3, so partial credit accrues across retries. What the retry
-loop actually improves is *execution*: 0.736 -> 0.900 (L1), 0.644 -> 0.840 (L2),
-0.548 -> 0.695 (L3). A rollout going from "throws on every case" to "runs and
-passes three of six" earns real reward without becoming a solution. Solve rate,
-which counts only all-six-pass, sees none of it.
+**A content-free retry captures 79%, 90% and 95% of the total gain.** The
+difference between a real diagnostic and the string "That answer was not
+correct." is not distinguishable from zero at any level.
 
-The diagnostic feedback teaches the model to emit *runnable* Octave. It does not
-teach it the algorithm — consistent with the 2026-08-08 taxonomy putting
-"can the model emit runnable Octave" first and "is the algorithm correct" last.
+**Retries are still the most valuable mechanism in the environment**, worth
++0.22 to +0.26 solve for Nemotron and +0.33 to +0.38 for Qwen3.5-4B. The weaker
+model gains more, which is what headroom predicts. It is the *content* that is
+inert, not the mechanism.
 
-**Consequence: a reward number is not portable across turn budgets.** Every
-hosted evaluation in this repository used `max_turns = 1`; the training scaffold
-uses 3. The 4B smoke's 0.925 and the eval's 0.400 on the same cell are both
-correct and not comparable. **Report `solve_rate` at a stated turn budget when
-the question is whether the policy got better at Octave.**
+**Is it just best-of-N?** Nearly, but slightly worse than independent
+resampling. If attempts were independent draws at the one-turn rate, two turns
+would give `1-(1-p)^2`: 0.815 / 0.754 / 0.523 against the observed
+0.688 / 0.656 / 0.434. Observed sits below that at every level, which is what
+correlated attempts look like — the model repeats its own mistakes, consistent
+with the 1.4-2.2 dispersion measured elsewhere. **The multi-turn scaffold is
+approximately correlated best-of-N sampling with a small informational bonus.**
 
-**Not a finding: the per-family deltas.** Largest are +0.042 and -0.056 at
-n ~ 72, where SE is about 0.06. Solve rate cannot genuinely fall with more
-attempts, since a solved rollout stops; the negatives are sampling variance.
-The near-zero aggregate is the result.
+**What this costs.** The guide is a paid call to a 35B model on a large share of
+rollouts, and the diagnostic is a second full Octave execution per retry. Both
+sit on top of a mechanism whose value is mostly the extra sample.
 
-**Why it survived.** The three-turn cell had never been measured for any model
-outside GPU training, because the guide credential was broken until the same
-morning — so the two budgets had never been compared on identical tasks.
+**Implications, in order of confidence.**
+1. **A multi-turn score is not comparable to a single-turn score**, and the gap
+   is mostly sampling, not capability. State the turn budget with any number.
+2. **The feedback rewrite is still correct to keep** — it removed an internal
+   protocol blob from the model's context and cut a syntax-failure message from
+   1,084 characters to 110 — but it should not be expected to move scores.
+3. **The guide's value is now doubtful** and is being measured directly
+   (3 turns with vs without). If it is also near zero, it should default off:
+   it is an external dependency, a per-rollout cost, and the source of the
+   day's worst outage.
 
-**Residual risk.** One model. Whether the same holds for a policy *being
-trained* — where retries also shape what the gradient sees — is untested.
+**Why it survived.** Nobody had run the control. Every prior comparison varied
+the turn budget *and* the information together, so the two were never separated.
+
+**Residual risk.** One model, one turn budget for the control. The null cell
+still tells the model *that* it was wrong, so this bounds the value of
+diagnostic detail, not of any feedback at all.
 
 ---
+
+## 2026-08-09 — RETRACTED: "retries buy execution, not solutions". They buy solutions.
+
+**Status: the earlier version of this entry was wrong. The error was mine and it
+was in the metric, not the data.**
+
+**What the entry claimed.** That reward rose +0.169 to +0.205 from one turn to
+three while solve rate stayed flat, and therefore that the retry loop bought
+execution and partial credit but never actual solutions.
+
+**Why it was wrong.** "Solve" was computed as
+`rewards.case_fraction >= 0.999`. `case_fraction` is the **discounted** reward:
+a fully correct answer earns 1.00 on attempt 1, **0.85 on attempt 2 and 0.60 on
+attempt 3**. So by construction the measure could not register a solve that
+arrived on any attempt after the first — precisely the population the whole
+question was about. The correct field is the `raw_case_fraction` metric, which
+the environment already reports for exactly this reason.
+
+**The corrected result.** Same 2,304 rollouts, solve rate recomputed from
+`raw_case_fraction`:
+
+| level | 1 turn | 2 turns | 3 turns | 1 -> 3 |
+|---|---:|---:|---:|---:|
+| L1 | 0.570 | 0.723 | 0.828 | **+0.258** |
+| L2 | 0.504 | 0.688 | 0.750 | **+0.246** |
+| L3 | 0.309 | 0.422 | 0.527 | **+0.219** |
+
+**Retries raise real solve rate by 22 to 26 points.** They are among the most
+effective things in the environment, not decoration. Of hinted rollouts that
+rewrote their function, 21.6% went on to fully solve.
+
+**What survives from the old entry.** Execution rises monotonically
+(0.736 -> 0.900 at L1), and the caution about comparing reward across turn
+budgets stands — but for a sharper reason than stated: reward mixes correctness
+with an attempt discount, so **reward is not a measure of capability at all
+when the turn budget varies. Use `raw_case_fraction`.**
+
+**Why it survived even one round.** The wrong number was self-consistent and
+told a tidy story — "the scaffold inflates the headline" — which is exactly the
+kind of claim that feels like sophistication and therefore gets less scrutiny
+than a boring one. It was caught only when a follow-up analysis reported *zero*
+solves after a hint, which was too extreme to believe and forced a look at the
+field being read.
+
+**Practice.** `case_fraction` is a training signal; `raw_case_fraction` is the
+measurement. Any comparison across turn budgets, and any statement of the form
+"the policy got better", uses the raw field. The two coincide only at one turn,
+which is why single-turn evaluations never exposed this.
+
 
 ## 2026-08-09 — "Truncation" in the trainer means ran-out-of-turns, not ran-out-of-tokens
 
