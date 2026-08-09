@@ -89,6 +89,37 @@ That covers both host-side paths: the reference solutions still pass (their
 `b=b(:)` and `a(:)` coercions are now no-ops on the corrected inputs rather
 than load-bearing), and the naive solutions pass too.
 
+## Consumer smoke from the Environments Hub
+
+Everything above tests the repository. This tests the *published artifact*, on
+the path a stranger would take, in a container that had never seen this project:
+
+1. fresh Prime CPU Sandbox on `gnuoctave/octave:10.2.0`;
+2. `pip install prime`, authenticate;
+3. `prime env pull kaiser-factorial/octave-rl` — resolves and downloads;
+4. `pip install -e .` — installs as the package `octave-rl` **0.2.2**;
+5. `import octave_rl` from outside the source directory — exports
+   `OctaveTaskset` and `load_environment`;
+6. `eval @ eval.toml` with `[taskset] id = "octave-rl"` — verifiers resolves the
+   taskset **by name from package metadata**, not from `PYTHONPATH`.
+
+| result | |
+|---|---|
+| rollouts | 16 (8 tasks x 2, Level 2, Nemotron, T=1.0) |
+| mean reward | 0.500 |
+| mean execution fraction | 0.667 |
+| infrastructure errors | **0** |
+| families exercised | 8 of 10 |
+
+The by-name resolution in step 6 is the part worth calling out: every earlier
+run in this project reached the taskset through a repository checkout or an
+explicit `PYTHONPATH`. This is the first evidence that the *published wheel*
+resolves and scores on its own.
+
+Locally, `prime env pull` also confirmed all five published files are
+byte-identical to the repository copies (`generators.py`, `harness.py`,
+`executors.py`, `octave_rl.py`, `README.md`).
+
 ## Not re-run
 
 `validate_reference_pool.py` — the Prime Sandbox path exercising `build_harness`

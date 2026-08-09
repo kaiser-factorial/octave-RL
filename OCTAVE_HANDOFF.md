@@ -816,11 +816,36 @@ current handoff update is intended to be versioned and verified on remote
 `main` together with the already-published Sandbox timeout/runtime plumbing,
 generated-config behavior, tests, and documentation.
 
-### Publication remains a user choice
+### Published to the Environments Hub
 
-The environment is ready for the Environments Hub, but it has not been pushed.
-Public versus private visibility must be chosen explicitly before
-`prime env push`.
+`kaiser-factorial/octave-rl` **0.2.2**, Hub build/test Action **SUCCESS**,
+visibility still **PRIVATE**. `prime env push --visibility` applies only when
+the environment is first created, so flipping it public is a dashboard action,
+not a CLI one. The Hub username was set during the first push and, per Prime,
+can only be chosen once.
+
+Verified from the consumer side, not just the repository: a fresh sandbox that
+had never seen this project pulled the environment, installed it as a package,
+and ran an eval in which verifiers resolved `id = "octave-rl"` from package
+metadata rather than a checkout or `PYTHONPATH` -- 16 rollouts, mean reward
+0.500, zero infrastructure errors. Every published file is byte-identical to
+its repository copy. See `artifacts/postfix-validation-20260809/RESULTS.md`.
+
+### Known gap: held-out pools share every prompt
+
+Recorded here because it changes what an eval number means. A pool of 1,500
+tasks contains about **30 distinct prompts**, and all 30 appear in both the
+training and held-out pools; what the seed split holds out is the hidden test
+*inputs*, not the question. RL on this environment can therefore drive toward
+memorising 30 function bodies, and a seed-disjoint evaluation cannot detect it.
+
+The cheap fix, not yet done, is a `families` field on the taskset config so
+train and eval can be disjoint by *problem*: train on eight families, evaluate
+on the two held out. That is the only way this substrate can currently support
+a generalization claim. The deeper fix -- parameterising the descriptions so a
+family generates many distinct problems -- would rewrite every prompt and
+invalidate the 2026-08-09 paired comparison, so it should be a deliberate
+version boundary rather than a patch.
 
 ## Recommended next steps
 
