@@ -44,9 +44,18 @@ def attempt_multiplier(
     attempts: int,
     second_attempt_multiplier: float,
     guided_attempt_multiplier: float,
+    guided: bool = False,
 ) -> float:
-    """Return the configured discount for the attempt that earned correctness."""
-    if attempts >= 3:
+    """Return the discount for the attempt that earned correctness.
+
+    ``guided`` tracks whether the guide actually delivered a hint, which since
+    2026-08-09 no longer coincides with "attempt 3": the hint now fires at the
+    first retry whose diagnostic cannot help. Tying the discount to the attempt
+    number alone would let a hinted solve on attempt 2 earn 0.85 where the same
+    help on attempt 3 earns 0.60 -- the reward would stop tracking assistance,
+    which is the one thing this discount exists to price.
+    """
+    if guided or attempts >= 3:
         return guided_attempt_multiplier
     if attempts == 2:
         return second_attempt_multiplier
@@ -346,6 +355,7 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 + result["feedback"][-1400:]
             )
             content = orientation + diagnostic
+            closing = "\nReturn one corrected replacement function."
             # Fire the guide where it is *needed*, not on a fixed attempt
             # number. Measured 2026-08-09: 31% of rollouts reach their first
             # retry with no execution error to report, so the ordinary
@@ -389,6 +399,7 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 else:
                     if hint:
                         content += "\nGuide hint: " + hint
+            content += closing
         return [{"role": "user", "content": content}]
 
 
@@ -441,6 +452,7 @@ class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
             attempts=max(1, trace.state.attempts),
             second_attempt_multiplier=self.config.second_attempt_multiplier,
             guided_attempt_multiplier=self.config.guided_attempt_multiplier,
+            guided=bool(getattr(trace.state, "guide_used", False)),
         )
 
     @vf.metric

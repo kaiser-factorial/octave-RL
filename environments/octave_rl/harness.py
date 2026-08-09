@@ -360,7 +360,11 @@ def build_retry_feedback(
     passed: int,
     total: int,
 ) -> str:
-    """Compose what the model is actually told between attempts.
+    """Compose the diagnostic the model is shown between attempts.
+
+    Returns the findings only. The caller appends any guide hint and the
+    closing instruction, so the hint reads before "return a corrected
+    function" rather than after it.
 
     Replaces handing it the raw Octave stdout, which was 46% transport blob by
     length, repeated each identical error once per case, carried a random temp
@@ -420,7 +424,6 @@ def build_retry_feedback(
                 "the wrong values."
             )
 
-    lines.append("Return one corrected replacement function.")
     return "\n".join(lines)
 
 

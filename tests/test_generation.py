@@ -203,6 +203,24 @@ def test_orientation_sensitive_arguments_arrive_as_the_prompt_describes() -> Non
                     assert _octave_shape(right)[0] == 1
 
 
+def test_the_discount_follows_the_hint_not_the_attempt_number() -> None:
+    """A hinted solve is priced as guided whenever the hint arrived.
+
+    Since the guide fires on need rather than on attempt 3, discounting purely
+    by attempt number would let the same assistance earn 0.85 on attempt 2 and
+    0.60 on attempt 3. The discount exists to price assistance, so it tracks
+    assistance.
+    """
+    kw = {"second_attempt_multiplier": 0.85, "guided_attempt_multiplier": 0.60}
+    assert attempt_multiplier(attempts=1, **kw) == 1.0
+    assert attempt_multiplier(attempts=2, **kw) == 0.85
+    assert attempt_multiplier(attempts=2, guided=True, **kw) == 0.60
+    assert attempt_multiplier(attempts=3, **kw) == 0.60
+    assert attempt_multiplier(attempts=3, guided=True, **kw) == 0.60
+    # An unguided first attempt is never discounted, hint flag or not.
+    assert attempt_multiplier(attempts=1, guided=False, **kw) == 1.0
+
+
 def test_retry_feedback_is_a_diagnostic_not_a_transport_dump() -> None:
     """What the model is told between attempts must be information, not protocol.
 
