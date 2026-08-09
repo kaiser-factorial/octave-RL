@@ -235,6 +235,19 @@ The container is the isolation boundary here, which is why
 Emulation costs roughly 4x: budget about 90 minutes for a full 1,500-task
 reference pass.
 
+## Reporting scores: use `raw_case_fraction`
+
+`rewards.case_fraction` is the **discounted** reward — correctness times an
+attempt multiplier (0.85 on attempt 2, 0.60 on attempt 3). Thresholding it to
+define "solved" cannot count a success after the first attempt, and doing so
+produced a wrong headline on 2026-08-09 (see `PIPELINE_LOG.md`). The two fields
+coincide only at one turn.
+
+**Any claim that the policy improved uses `raw_case_fraction`, at a stated turn
+budget.** Retries are worth +0.22 to +0.38 solve rate, but a control shows
+79–95% of that is the extra attempt rather than the feedback, so a multi-turn
+score is mostly resampling.
+
 ## Train, validation, and test splits
 
 A pool's prompt is determined by `(family, level)` and carries nothing

@@ -248,6 +248,36 @@ vector as a column — so the natural solution is conformant as written.
 by running a deliberately naive solution per family and level and requiring it
 to pass.
 
+## What a multi-turn score means
+
+Measured on 2026-08-09 and worth knowing before you report anything from a
+multi-turn configuration.
+
+**Retries are the strongest lever in the environment.** Solve rate from one turn
+to three: Nemotron-3-Nano 0.570 → 0.828 (L1), Qwen3.5-4B 0.332 → 0.715. Gains of
++0.22 to +0.38, larger for the weaker model.
+
+**But almost none of it comes from the feedback.** A control that replaced the
+whole diagnostic with the sentence "That answer was not correct." kept
+**79–95%** of the gain; the informative version beat it by +0.031/+0.016/+0.008,
+none distinguishable from zero. Two-turn solve also lands *below* independent
+resampling (0.688 against the 0.815 that `1−(1−p)²` predicts), which is what
+correlated attempts look like.
+
+So **the multi-turn scaffold is approximately correlated best-of-N sampling**
+with a small informational bonus. The one component with a measured effect is
+the LLM guide — a specific diagnosis of the actual bug — worth **+0.062 at
+Level 1** (t = 2.37) on top of the extra attempt.
+
+Two rules follow:
+
+- **Always state the turn budget with a score.** A 3-turn number is not
+  comparable to a 1-turn number, and most of the gap is resampling.
+- **Measure with `raw_case_fraction`, not the reward.** `case_fraction`
+  multiplies correctness by an attempt discount (0.85 on attempt 2, 0.60 on
+  attempt 3), so thresholding it cannot count a success after the first attempt.
+  The two coincide only at one turn.
+
 ## Multi-turn and the optional guide
 
 `max_turns` maps to the persistent user's attempt budget. The user simulator
@@ -339,6 +369,23 @@ point. It is native `verifiers.v1` throughout and does not mix in the legacy v0
 - Verifiers: `>=0.2.1,<0.3` · NumPy: `>=2.0,<3`
 - Each task is fully determined by `(level, seed, task index)`.
 - Six hidden cases per task, generated with NumPy and stored with the task.
+
+## Changes in 0.4.0
+
+- The retry feedback is a composed diagnostic instead of raw Octave stdout. The
+  old message was 46% `__OCTAVE_CANDIDATE_RESULT__` transport blob by length,
+  repeated each identical error once per case with a random temp path, and for
+  33% of retries carried no diagnostic at all. It now strips the blob and paths,
+  deduplicates errors, and names which failure mode occurred: did not run, ran
+  with the wrong shape (stating both shapes), or ran with the right shape and
+  wrong values. A six-case syntax failure went from 1,084 characters to 110.
+- The guide fires **on need** — the first retry whose diagnostic cannot help —
+  rather than at a fixed attempt number. 31% of rollouts reach their first retry
+  with no execution error, where the hint is the only thing that can help.
+- The attempt discount follows the hint rather than the attempt number: a hinted
+  solve is priced at `guided_attempt_multiplier` whenever the hint arrived.
+- No score change is expected from any of this; see "What a multi-turn score
+  means".
 
 ## Changes in 0.3.1
 
