@@ -6,8 +6,10 @@ function against six hidden NumPy-derived cases on a pinned Octave interpreter
 and awards the fraction that pass. No judge model, no partial credit for
 looking plausible, and nothing the candidate prints can set its own score.
 
-The task pool is generated, not scraped, so it is unbounded, disjoint by
-construction between train and eval, and cannot leak from a public benchmark.
+The task pool is generated rather than scraped, so it cannot leak from a public
+benchmark and its hidden test cases are unbounded. It is **not** an unbounded
+supply of distinct problems — see "What '500 tasks' means" below before
+reporting a number.
 
 ## What this environment actually measures
 
