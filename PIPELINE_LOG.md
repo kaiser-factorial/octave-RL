@@ -30,6 +30,68 @@ entry is worth having.
 
 ---
 
+## 2026-08-09 — The repaired Level 1 is too easy to train on, and the user server fails on retry turns
+
+**Symptom.** First 3-step smoke against the repaired taskset (0.3.0, 8-family
+train split). Reward 0.9250 at every one of three steps, trainable fraction
+falling 80% -> 20% -> 16.7%, and a rollout error rate of 20% / 20% / 33%.
+
+**Finding 1: Level 1 saturated.** Pre-repair the same config gave 0.6500 /
+0.4625 / 0.9250 with turns 2.0-2.2; now it gives 0.9250 flat with turns 1.5.
+With three attempts and the guide, Qwen3.5-4B solves repaired Level 1 almost
+always. A group whose rollouts all score 1.0 is exactly as gradient-free as one
+that all score 0, which is why the trainable fraction collapses. The repair
+moved this cell from partly broken, through useful, and out the other side.
+
+The real run should start on an L2/L3 mix: post-repair single-turn T=1.0 rates
+put Qwen at 0.214 on Level 2 and 0.118 on Level 3, against the 10-35% band the
+platform recommends for the model being trained.
+
+*Sample caveat.* Batches are 8-12 rollouts and three identical 0.9250 readings
+at that size are not a trend — the 2026-08-08 entry warns against precisely
+this reading. What survives is the direction and the trainable collapse, the
+latter being structural rather than a noisy point estimate.
+
+**Finding 2: `UserError` on retry turns, above the abort threshold.** 20-33% of
+rollouts hit `user server at http://127.0.0.1:PORT/mcp respond failed:
+JSONDecodeError('Expecting value: line 1 column 1 (char 0)')`. The 2026-08-08
+run reported zero infrastructure errors, so this is new.
+
+Read from the environment log rather than the summary line: the failure occurs
+**only on retry turns** — where the user simulator executes the submission and
+calls the guide — and the response body is *empty*, not malformed. Most
+rollouts retry and finish (`reward=0.850 turns=3`); one of ten in step 1 was
+genuinely lost (`stop=UserError`, reward 0.000). So the headline error rate
+overstates lost work, and understates the risk: the failures are concentrated
+on multi-turn rollouts, which are the harder tasks, so the loss is not uniform
+across the reward distribution.
+
+**Blast radius.** No published number. The smoke's purpose — does the loop run
+end to end on the repaired taskset with a family split — was met. Both findings
+change what the next run should be rather than invalidating anything.
+
+**Why it survived.** Neither could have been seen before: this is the first
+training against the repaired pool, and the error is on a code path (retry +
+guide) that the hosted evaluations deliberately disable
+(`max_attempts = 1, guide_enabled = false`).
+
+**Fix.** None yet, deliberately. Two open items, both to settle before a 20-step
+run: pick the starting level mix from post-repair rates rather than inheriting
+Level 1, and diagnose the empty user-server response. The runbook's 5% error
+threshold applies and this is above it.
+
+**Verification.** `artifacts/training/qwen-4b-3step-splits-20260809/`. Pod
+terminated after 39 minutes, ~$0.98. Holdout verified intact by mapping the
+environment log's task indices back through `build_tasks`, which is the only
+sound check: retained rollout blobs are tokenized, so grepping them for family
+names finds nothing whether or not the holdout leaked.
+
+**Residual risk.** The user-server failure is uncharacterised. It could be the
+guide call timing out, the MCP subprocess dying, or a port collision; nothing
+here distinguishes them.
+
+---
+
 ## 2026-08-09 — Held-out pools are disjoint by task and identical by prompt
 
 **Symptom.** None observed; found by answering the question "if we train on

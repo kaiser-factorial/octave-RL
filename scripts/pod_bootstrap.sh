@@ -97,7 +97,12 @@ elif [ ! -f "$MERGED/config.json" ]; then
 else
   echo "merged checkpoint already present at $MERGED"
 fi
-du -sh "$MERGED"
+# Guarded: training from base leaves $MERGED absent, and an unguarded `du` on a
+# missing path exits non-zero, which under `set -e` aborts the bootstrap at its
+# final step. Everything needed is already done at that point, so the failure
+# is silent-but-confusing rather than harmful -- it just makes an unattended
+# bootstrap report failure on its most common path.
+[ -d "$MERGED" ] && du -sh "$MERGED" || echo "no merged checkpoint (training from base)"
 
 step "done"
 echo "export OCTAVE_RL_OCTAVE_ROOTFS=$ROOTFS"

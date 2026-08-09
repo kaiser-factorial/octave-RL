@@ -130,12 +130,29 @@ Both host-side validators pass 9,000/9,000 on the pinned interpreter with real
 
 ### The next experiment
 
-Option B, now on a repaired pool: run the pending 20-step Qwen continuation at
-`group_size = 8` on the L2/L3 mix and measure dispersion at steps 0, 10 and 20
-with `scripts/group_spread.py`. The argument for doing it now rather than
-before is that the pool composition question has been settled — the earlier
-concern that B's headline number "would not survive the taskset fix" no longer
-applies.
+**A 3-step smoke has now run against the repaired taskset with the family
+split** (`artifacts/training/qwen-4b-3step-splits-20260809/`, 39 minutes,
+~$0.98). The loop works end to end and the holdout held — verified by mapping
+the environment log's task indices back through `build_tasks`, since the
+retained rollout blobs are tokenized and grep finds nothing either way.
+
+It also changed the plan in two ways:
+
+1. **Do not start on Level 1.** It is now saturated: reward 0.9250 at all three
+   steps with the trainable fraction collapsing 80% -> 20% -> 16.7%. A
+   unanimous-at-1.0 group is exactly as gradient-free as a unanimous-at-0 one.
+   Start on an L2/L3 mix — post-repair Qwen sits at 0.214 (L2) and 0.118 (L3)
+   at T=1.0 single-turn, against the 10-35% band the platform recommends.
+2. **Diagnose the user-server error first.** 20-33% of rollouts hit an empty
+   response from the user MCP server, only on retry turns. The runbook's abort
+   threshold is 5%. Most rollouts recover, but the losses concentrate on
+   multi-turn rollouts, i.e. the harder tasks, so the damage is not uniform
+   across the reward distribution.
+
+Then Option B on the repaired pool: the 20-step Qwen continuation at
+`group_size = 8` on the L2/L3 mix, with dispersion measured at steps 0, 10 and
+20 via `scripts/group_spread.py`, promotion gated on the **validation** split,
+and the generalization split read once at the end.
 
 **What not to do.** Do not pick a curriculum mix by level alone. Family matters
 far more than level, and a nominal L2/L3 mix can contain anything from a
