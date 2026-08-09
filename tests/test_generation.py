@@ -203,6 +203,97 @@ def test_orientation_sensitive_arguments_arrive_as_the_prompt_describes() -> Non
                     assert _octave_shape(right)[0] == 1
 
 
+def test_retry_feedback_is_a_diagnostic_not_a_transport_dump() -> None:
+    """What the model is told between attempts must be information, not protocol.
+
+    Measured over 396 retries on 2026-08-09, the old feedback was the raw Octave
+    stdout: 46% of its length was the `__OCTAVE_CANDIDATE_RESULT__` blob, each
+    identical error was repeated once per case with a random temp path, and 33%
+    of retries carried no diagnostic at all.
+    """
+    cases = [{"expected": [[1], [2], [3]]} for _ in range(6)]
+    raw = "\n".join(
+        f"CASE {i} ERROR syntax error near line 3, column 57 "
+        f"in file /tmp/vf-a6d/octave-rl-local-qwwf/f.m"
+        for i in range(1, 7)
+    ) + f"\n{CANDIDATE_RESULT_MARKER_PREFIX}abc [...]"
+    text = harness_module.build_retry_feedback(
+        raw, records=[{"ok": False}] * 6, cases=cases,
+        tolerance=1e-9, passed=0, total=6,
+    )
+    assert CANDIDATE_RESULT_MARKER_PREFIX not in text, "transport blob leaked into feedback"
+    assert "/tmp/" not in text, "random temp path leaked into feedback"
+    assert text.count("syntax error") == 1, "identical errors must be deduplicated"
+    assert "6 cases did not run" in text
+    assert len(text) < 200, f"feedback bloated back up: {len(text)} chars"
+
+
+def test_running_but_wrong_still_gets_a_diagnostic() -> None:
+    """The 33% blind spot: code that runs and is merely wrong.
+
+    It used to produce a message with no diagnostic content whatsoever -- the
+    pass count, then the model's own output values echoed back. The three
+    failure modes need different fixes and must be distinguishable.
+    """
+    cases = [{"expected": [[1], [2], [3]]} for _ in range(6)]
+
+    wrong_shape = harness_module.build_retry_feedback(
+        f"{CANDIDATE_RESULT_MARKER_PREFIX}abc []",
+        records=[{"ok": True, "shape": [1, 3], "values": [1, 2, 3]}] * 6,
+        cases=cases, tolerance=1e-9, passed=0, total=6,
+    )
+    assert "1x3" in wrong_shape and "3x1" in wrong_shape, wrong_shape
+
+    wrong_values = harness_module.build_retry_feedback(
+        f"{CANDIDATE_RESULT_MARKER_PREFIX}abc []",
+        records=[{"ok": True, "shape": [3, 1], "values": [9, 9, 9]}] * 6,
+        cases=cases, tolerance=1e-9, passed=0, total=6,
+    )
+    assert "wrong values" in wrong_values, wrong_values
+    # The two cases must not read alike -- that was the whole defect.
+    assert wrong_shape != wrong_values
+
+
+def test_the_guide_fires_when_the_diagnostic_cannot_help() -> None:
+    """Hint timing follows need, not attempt number.
+
+    31% of rollouts reach their first retry with no execution error to report,
+    so the ordinary diagnostic can only say "wrong answer". The guide used to
+    arrive on the attempt *after* that.
+    """
+    config = octave_environment.OctaveUserConfig(
+        max_attempts=3, guide_enabled=True, octave_runtime="local"
+    )
+    calls: list[str] = []
+
+    async def fake_guide(_code, diagnostic):
+        calls.append(diagnostic)
+        return "try dimension 1"
+
+    async def ran_but_wrong(*_a, **_k):
+        return {
+            "passed": 0, "total": 6, "feedback": "",
+            "retry_feedback": "Hidden tests passed 0/6 cases.\n6 cases ran with "
+                              "the correct shape but the wrong values.",
+            "has_execution_error": False,
+        }
+
+    user = octave_environment.OctaveUser(config)
+    user._inert_state = octave_environment.OctaveState(attempts=0)
+    user.task = SimpleNamespace(prompt="p", cases=[{}] * 6)
+    user._guide_hint = fake_guide
+    original = octave_environment.execute_candidate
+    octave_environment.execute_candidate = ran_but_wrong
+    try:
+        reply = asyncio.run(user.respond("```octave\nfunction out=f(x)\nout=x;\nend\n```"))
+    finally:
+        octave_environment.execute_candidate = original
+
+    assert "Guide hint:" in reply[0]["content"], "guide should fire on the first uninformative retry"
+    assert user.state.guide_used
+    assert CANDIDATE_RESULT_MARKER_PREFIX not in calls[0], "guide must not see the transport blob"
+
+
 def test_a_failing_guide_degrades_the_retry_instead_of_killing_the_rollout() -> None:
     """A guide failure must not propagate out of `respond`.
 

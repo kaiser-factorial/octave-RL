@@ -197,6 +197,9 @@ class OctaveState(vf.State):
     # rollout continues without the hint rather than dying: a missing hint is a
     # degraded retry, not an invalid one.
     guide_unavailable: str = ""
+    # The guide fires at most once per rollout, at the point the ordinary
+    # diagnostic cannot help. See `respond`.
+    guide_used: bool = False
 
 
 class OctaveUserConfig(vf.UserConfig):
@@ -233,16 +236,15 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
         )
 
     async def _guide_hint(self, code: str, feedback: str) -> str:
-        diagnostic = next(
-            (
-                line.strip()
-                for line in feedback.splitlines()
-                if line.strip()
-                and not line.startswith("CASE ")
-                and not line.startswith(CANDIDATE_RESULT_MARKER_PREFIX)
-            ),
-            "Some hidden cases still fail.",
-        )
+        # `feedback` is the composed retry diagnostic, not raw Octave stdout.
+        # It used to be the latter, and the line this picked out was usually the
+        # transport blob -- so the guide was reasoning about a JSON dump of the
+        # candidate's own return values.
+        diagnostic = "\n".join(
+            line.strip()
+            for line in feedback.splitlines()
+            if line.strip() and not line.startswith(CANDIDATE_RESULT_MARKER_PREFIX)
+        )[:600] or "Some hidden cases still fail."
         client = AsyncOpenAI(
             api_key=self._prime_api_key(),
             base_url="https://api.pinference.ai/api/v1",
@@ -336,17 +338,31 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
         if solved:
             content = f"All {result['total']} hidden cases passed."
         else:
-            content = (
+            # `retry_feedback` is the composed diagnostic; the raw transport is
+            # kept out of the conversation entirely. Older records predate it.
+            diagnostic = result.get("retry_feedback") or (
                 f"Hidden tests passed {result['passed']}/{result['total']} cases. "
                 "Return one corrected replacement function.\n"
-                + orientation
                 + result["feedback"][-1400:]
             )
+            content = orientation + diagnostic
+            # Fire the guide where it is *needed*, not on a fixed attempt
+            # number. Measured 2026-08-09: 31% of rollouts reach their first
+            # retry with no execution error to report, so the ordinary
+            # diagnostic can only say "wrong answer" -- and the hint, the one
+            # thing that addresses that, used to arrive an attempt later. When
+            # the code does not run, the Octave error is the better signal and
+            # the guide waits.
+            needs_guide = not result.get("has_execution_error", True)
+            last_retry = self.state.attempts >= self.config.max_attempts - 1
             if (
                 self.config.guide_enabled
                 and self.config.max_attempts >= 3
-                and self.state.attempts == 2
+                and not self.state.guide_used
+                and not self.state.done
+                and (needs_guide or last_retry)
             ):
+                self.state.guide_used = True
                 # A guide failure must not kill the rollout. It used to: the
                 # exception escaped `respond`, and the MCP layer turned it into
                 # a contentless tool result that the host reported as
@@ -359,7 +375,7 @@ class OctaveUser(vf.User[OctaveUserConfig, OctaveState]):
                 # losing every third turn.
                 try:
                     hint = await self._guide_hint(
-                        code or "(no valid function submitted)", result["feedback"]
+                        code or "(no valid function submitted)", diagnostic
                     )
                 except Exception as exc:  # noqa: BLE001 - any guide failure degrades
                     self.state.guide_unavailable = f"{type(exc).__name__}: {exc}"

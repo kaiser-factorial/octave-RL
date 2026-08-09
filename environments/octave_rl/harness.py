@@ -345,6 +345,85 @@ def candidate_record_is_transpose(
     return True
 
 
+CASE_ERROR_RE = re.compile(r"CASE \d+ ERROR (.+)")
+# Octave names the temp file in syntax errors. The directory is random per
+# execution, so it is pure noise in feedback and differs on every retry.
+IN_FILE_RE = re.compile(r"\s*in file \S+")
+
+
+def build_retry_feedback(
+    output: str,
+    *,
+    records: list[dict[str, Any]] | None,
+    cases: list[dict[str, Any]],
+    tolerance: float,
+    passed: int,
+    total: int,
+) -> str:
+    """Compose what the model is actually told between attempts.
+
+    Replaces handing it the raw Octave stdout, which was 46% transport blob by
+    length, repeated each identical error once per case, carried a random temp
+    path, and -- for the 33% of retries where the code *ran* and was merely
+    wrong -- contained no diagnostic at all. Measured over 396 retries on
+    2026-08-09.
+
+    Three failure modes need three different fixes and were previously
+    indistinguishable: did not run, ran with the wrong shape, ran with the wrong
+    values. Naming which one occurred leaks nothing: the expected shape is
+    already stated in the prompt, and the actual shape is the model's own
+    output.
+    """
+    lines = [f"Hidden tests passed {passed}/{total} cases."]
+
+    errors: dict[str, int] = {}
+    for match in CASE_ERROR_RE.finditer(output):
+        message = IN_FILE_RE.sub("", match.group(1)).strip()
+        errors[message] = errors.get(message, 0) + 1
+    for message, count in sorted(errors.items(), key=lambda kv: -kv[1])[:3]:
+        plural = "s" if count > 1 else ""
+        lines.append(f"{count} case{plural} did not run: {message}")
+
+    if records is not None:
+        wrong_shape = 0
+        wrong_values = 0
+        shape_example: tuple[list[int], list[int]] | None = None
+        for record, case in zip(records, cases, strict=True):
+            if record.get("ok") is not True:
+                continue
+            if candidate_record_matches(
+                record, expected=case["expected"], tolerance=tolerance
+            ):
+                continue
+            expected_shape = _octave_shape(case["expected"])
+            try:
+                actual_shape = [int(item) for item in record.get("shape") or []]
+            except (TypeError, ValueError):
+                actual_shape = []
+            if expected_shape and actual_shape and actual_shape != expected_shape:
+                wrong_shape += 1
+                if shape_example is None:
+                    shape_example = (actual_shape, expected_shape)
+            else:
+                wrong_values += 1
+        if wrong_shape and shape_example is not None:
+            actual, expected = shape_example
+            plural = "s" if wrong_shape > 1 else ""
+            lines.append(
+                f"{wrong_shape} case{plural} ran but returned "
+                f"{actual[0]}x{actual[1]} where {expected[0]}x{expected[1]} is required."
+            )
+        if wrong_values:
+            plural = "s" if wrong_values > 1 else ""
+            lines.append(
+                f"{wrong_values} case{plural} ran with the correct shape but "
+                "the wrong values."
+            )
+
+    lines.append("Return one corrected replacement function.")
+    return "\n".join(lines)
+
+
 def score_candidate_output(
     output: str,
     *,
@@ -411,5 +490,17 @@ def score_candidate_output(
         "transposed_fraction": transposed / total if total else 0.0,
         "structured_result": float(records is not None),
         "exit_code": exit_code,
+        # `feedback` stays raw for logs, traces and offline analysis.
+        # `retry_feedback` is what the model is shown; never hand it the raw
+        # transport, which carries the protocol blob and duplicate errors.
         "feedback": output[-2000:],
+        "retry_feedback": build_retry_feedback(
+            output,
+            records=records,
+            cases=cases,
+            tolerance=tolerance,
+            passed=passed,
+            total=total,
+        ),
+        "has_execution_error": bool(CASE_ERROR_RE.search(output)),
     }
