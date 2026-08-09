@@ -1,0 +1,122 @@
+# Three-step training smoke for Qwen3.5-0.8B at group_size 8.
+#
+# Why 0.8B: on the repaired taskset it scores 0.107 reward / 0.078 solve rate on
+# Level 1 in this exact scaffold, against 4B's 0.641 -- 4B has outgrown Level 1,
+# 0.8B has not. It also has the best format_ok (0.64) and least truncation
+# (2.5%) of the sizes measured, and costs a fifth of 4B to train.
+# See artifacts/smaller-models-20260809/RESULTS.md.
+#
+# Why group_size 8 is not optional here: at a 0.078 solve rate, g=4 leaves ~78%
+# of groups unanimous and therefore gradient-free. 0.8B's rollout dispersion is
+# 1.44 -- close to independent, against 4B's 2.15 -- so a bigger group buys
+# nearly what the theory predicts, taking that to roughly 0.52 at g=8.
+#
+# `group_size` and `max_inflight_rollouts` are DIFFERENT knobs and were once
+# conflated. The CUDA illegal-memory failures on this SM89 host came from 7-8
+# *simultaneous generations*, which `max_inflight_rollouts` bounds; it stays at
+# 2. `group_size` only says how many rollouts share a task's advantage.
+#
+# Deliberately matched to the historical 20-step run where it does not conflict
+# with a known hazard, so a later comparison is apples-to-apples: Level 1 only,
+# three attempts, guide before attempt three, LoRA rank 16, lr 1e-5.
+#
+# Deviations, each for a recorded reason:
+#   - group_size 2 and max_inflight_rollouts 2 (not 8). The Qwen3.5 GDN worker
+#     reproduced CUDA illegal-memory failures at 7-8 simultaneous long
+#     generations on this SM89 host.
+#   - No integrated eval. An eval env's multiplex does not constrain prime-rl's
+#     global dispatcher, so integrated eval still launched 8 concurrent
+#     requests. Evaluate a static checkpoint separately at concurrency one.
+#   - enable_thinking = false at the renderer. `reasoning_effort` alone does not
+#     suppress thinking; measured 87.9% truncation and format validity 0.12
+#     when it is relied on.
+#   - 1536 completion tokens / 6144 total, the tested envelope for three
+#     attempts.
+#   - octave_runtime = "local": candidates execute against the pinned Octave
+#     10.2.0 rootfs on this host. Requires OCTAVE_RL_OCTAVE_ROOTFS.
+#
+# Validated against prime-rl @ 44539229436a23e624b0f39826014a4e58a703be.
+max_steps = 3
+seq_len = 4096
+output_dir = "training_outputs/octave-qwen-08b-3step-smoke"
+clean_output_dir = true
+
+[deployment]
+type = "single_node"
+num_train_gpus = 1
+num_infer_gpus = 1
+
+[model]
+name = "Qwen/Qwen3.5-0.8B"
+
+[model.vlm]
+vision_encoder_attr = "model.visual"
+language_model_attr = "model.language_model"
+
+[orchestrator]
+batch_size = 16
+group_size = 8
+max_inflight_rollouts = 2
+collect_inference_metrics = false
+
+[orchestrator.renderer]
+name = "qwen3.5"
+enable_thinking = false
+
+[orchestrator.train.sampling]
+# T=1.0 keeps the sampled distribution equal to the one whose log-probs the
+# trainer scores. Do not lower it to make tasks "harder" -- that biases the
+# objective; change the task mix instead.
+temperature = 1.0
+max_completion_tokens = 1536
+
+# TRAIN SPLIT. `families` excludes reduce_along_dim and reshape_permute, which are
+# the generalization holdout -- see README "Train, validation, and test splits".
+# If this list is edited, edit configs/eval/octave-split-*.toml to match, or the
+# holdout stops being held out and the generalization number becomes meaningless.
+[[orchestrator.train.env]]
+name = "octave-level1-guided-local"
+group_size = 8
+taskset = { id = "octave-rl", families = ["logical_index", "broadcast_arith", "sliding_window", "linsolve_tolerance", "sequence_recurrence", "struct_cell_wrangle", "string_parse", "signal_identity"], level = 1, num_tasks = 500, seed = 314159, task = { octave_runtime = "local", second_attempt_multiplier = 0.85, guided_attempt_multiplier = 0.60, user = { colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B", octave_runtime = "local" } } }
+harness = { id = "null", runtime = { type = "subprocess" } }
+max_turns = 3
+max_total_tokens = 6144
+timeout = { rollout = 900, finalize = 300, scoring = 60 }
+pool = { type = "elastic", max_workers = 1, multiplex = 2 }
+
+[trainer]
+
+[trainer.model]
+impl = "custom"
+optimization_dtype = "bfloat16"
+reduce_dtype = "bfloat16"
+optim_cpu_offload = true
+
+[trainer.model.lora]
+rank = 16
+alpha = 32
+dropout = 0.0
+
+[trainer.optim]
+lr = 1e-5
+
+[trainer.ckpt.weights]
+save_adapter_separately = true
+
+[ckpt]
+# Every step: a three-step smoke must leave a retrievable checkpoint even if
+# it is stopped early, and the adapter round-trip is part of the pass criteria.
+interval = 1
+keep_last = 3
+
+[inference]
+gpu_memory_utilization = 0.85
+
+[inference.model]
+# RTX 6000 Ada (SM89): vLLM's CUDA-graph init and bundled FlashAttention-2 path
+# both fault on Qwen3.5. These two settings are the validated workaround.
+enforce_eager = true
+max_model_len = 6144
+
+[inference.vllm_extra]
+attention_backend = "TRITON_ATTN"
