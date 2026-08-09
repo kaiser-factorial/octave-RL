@@ -459,6 +459,11 @@ class OctaveConfig(vf.TasksetConfig):
     num_tasks: int = 500
     seed: int = 0
     require_vectorized: bool = False
+    # Restricts the pool to these families. `None` means all ten. A pool's
+    # prompts are determined by (family, level), so two pools drawn with
+    # different seeds share every prompt; holding out a family is the only way
+    # to obtain a genuinely held-out *problem*. See `DEFAULT_HELDOUT_FAMILIES`.
+    families: list[str] | None = None
 
 
 class OctaveTaskset(vf.Taskset[OctaveTask, OctaveConfig]):
@@ -471,6 +476,7 @@ class OctaveTaskset(vf.Taskset[OctaveTask, OctaveConfig]):
             seed=self.config.seed,
             require_vectorized=self.config.require_vectorized,
             include_reference=True,
+            families=self.config.families,
         )
         tasks = []
         for idx, row in enumerate(rows):
@@ -497,6 +503,7 @@ def load_environment(
     max_turns: int = 2,
     require_vectorized: bool = False,
     seed: int = 0,
+    families: list[str] | None = None,
     **kwargs: Any,
 ) -> OctaveTaskset:
     """Construct the native-v1 equivalent of the brief's environment factory.
@@ -504,6 +511,10 @@ def load_environment(
     ``max_turns`` controls the persistent user's attempt budget. The rollout
     harness should use the same or a larger turn cap so the taskset, rather
     than the orchestrator, decides when a solved interaction stops.
+
+    ``families`` restricts the pool. Because a pool's prompts are determined by
+    (family, level), a different ``seed`` holds out hidden inputs but not
+    questions; excluding families is what produces a held-out *problem*.
     """
     if max_turns < 1:
         raise ValueError("max_turns must be at least 1")
@@ -536,6 +547,7 @@ def load_environment(
         num_tasks=num_tasks,
         seed=seed,
         require_vectorized=require_vectorized,
+        families=families,
     ))
 
 

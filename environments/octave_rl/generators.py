@@ -298,13 +298,78 @@ FAMILIES: list[Callable] = [
     linsolve_tolerance, sequence_recurrence, struct_cell_wrangle, string_parse, signal_identity,
 ]
 
+FAMILY_NAMES: list[str] = [family.__name__ for family in FAMILIES]
 
-def build_tasks(level=1, num_tasks=500, seed=0, require_vectorized=False, include_reference=False):
+# The default generalization split. Holding out a *family* is the only way this
+# taskset can support a held-out-problem claim: a pool's prompts are determined
+# by (family, level), so two pools drawn with different seeds share every
+# prompt and differ only in hidden test inputs.
+#
+# These two were chosen for dynamic range and for what they test. Both sit
+# mid-difficulty for both measured models (2026-08-09: reduce_along_dim
+# 0.389/0.326, reshape_permute 0.569/0.292), so neither is floored nor
+# ceilinged. `reduce_along_dim` has a near neighbour that stays in training --
+# `struct_cell_wrangle` level 2+ is also a column-wise reduction -- so it tests
+# transfer of a practiced idiom. `reshape_permute` has none, so it tests
+# whether general Octave fluency reaches an unpracticed one.
+#
+# This is a default, not a recommendation for every experiment. Hold out the
+# two hardest families and a real improvement will be invisible against the
+# floor; hold out the two easiest and it vanishes into the ceiling.
+DEFAULT_HELDOUT_FAMILIES: list[str] = ["reduce_along_dim", "reshape_permute"]
+
+
+def resolve_families(families: list[str] | None) -> list[str]:
+    """Validate a family selection, or return all ten."""
+    if families is None:
+        return list(FAMILY_NAMES)
+    unknown = [name for name in families if name not in FAMILY_NAMES]
+    if unknown:
+        raise ValueError(
+            f"unknown task families {unknown}; valid names are {FAMILY_NAMES}"
+        )
+    if not families:
+        raise ValueError("families must select at least one family")
+    return list(dict.fromkeys(families))
+
+
+def training_families(heldout: list[str] | None = None) -> list[str]:
+    """The complement of a holdout, in canonical order."""
+    excluded = set(resolve_families(heldout if heldout is not None else DEFAULT_HELDOUT_FAMILIES))
+    kept = [name for name in FAMILY_NAMES if name not in excluded]
+    if not kept:
+        raise ValueError("holding out every family leaves nothing to train on")
+    return kept
+
+
+def build_tasks(
+    level=1,
+    num_tasks=500,
+    seed=0,
+    require_vectorized=False,
+    include_reference=False,
+    families=None,
+):
+    """Generate ``num_tasks`` tasks, optionally restricted to some families.
+
+    Restricting families *filters* the full ten-family stream rather than
+    cycling over the selection, so a given family's k-th task is byte-identical
+    whichever other families are present. That is what makes a train split and
+    a holdout split drawn from one seed genuinely disjoint *and* individually
+    comparable to a full-pool measurement. Task indices come from the full
+    stream, so ids stay stable and are not contiguous within a filtered pool.
+    """
+    selected = set(resolve_families(families))
     rng = np.random.default_rng(seed)
     rows = []
-    for index in range(num_tasks):
-        task = FAMILIES[index % len(FAMILIES)](rng, level)
+    index = 0
+    while len(rows) < num_tasks:
+        family = FAMILIES[index % len(FAMILIES)]
+        task = family(rng, level)
         task["task"] += f"-{index:05d}"
+        index += 1
+        if family.__name__ not in selected:
+            continue
         if require_vectorized:
             task["info"]["require_vectorized"] = True
         if not include_reference:

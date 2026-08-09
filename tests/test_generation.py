@@ -10,7 +10,14 @@ sys.path.insert(
 
 import harness as harness_module
 import octave_rl as octave_environment
-from generators import DESCRIPTIONS, build_tasks
+import pytest
+from generators import (
+    DEFAULT_HELDOUT_FAMILIES,
+    DESCRIPTIONS,
+    FAMILY_NAMES,
+    build_tasks,
+    training_families,
+)
 from harness import (
     CANDIDATE_RESULT_MARKER_PREFIX,
     RESULT_MARKER_PREFIX,
@@ -60,6 +67,53 @@ def test_all_families_and_levels_are_present() -> None:
     for level in (1, 2, 3):
         tasks = build_tasks(level, 20, 42, False, True)
         assert {task["info"]["family"] for task in tasks} == expected
+
+
+def test_family_holdout_splits_are_disjoint_and_cover_the_pool() -> None:
+    heldout = DEFAULT_HELDOUT_FAMILIES
+    trained = training_families()
+    assert set(trained) & set(heldout) == set()
+    assert set(trained) | set(heldout) == set(FAMILY_NAMES)
+
+    for level in (1, 2, 3):
+        train_rows = build_tasks(level, 40, 5, families=trained)
+        test_rows = build_tasks(level, 20, 5, families=heldout)
+        assert {row["info"]["family"] for row in train_rows} == set(trained)
+        assert {row["info"]["family"] for row in test_rows} == set(heldout)
+        assert len(train_rows) == 40 and len(test_rows) == 20
+        # The point of the split: no task, and therefore no prompt, is shared.
+        train_prompts = {row["prompt"][0]["content"] for row in train_rows}
+        test_prompts = {row["prompt"][0]["content"] for row in test_rows}
+        assert train_prompts & test_prompts == set()
+
+
+def test_a_family_generates_the_same_tasks_whichever_others_are_present() -> None:
+    """Filtering must not perturb a family's draw.
+
+    A split is only usable as a holdout if the held-out family's tasks are the
+    same objects a full-pool measurement would have produced. Cycling over the
+    selection instead of filtering the full stream would silently break this,
+    and the resulting numbers would look fine.
+    """
+    for level in (1, 2, 3):
+        full = build_tasks(level, 200, 99, include_reference=True)
+        for family in ("reduce_along_dim", "string_parse"):
+            from_full = [row for row in full if row["info"]["family"] == family]
+            filtered = build_tasks(
+                level, len(from_full), 99, include_reference=True, families=[family]
+            )
+            assert json.dumps(filtered, sort_keys=True) == json.dumps(
+                from_full, sort_keys=True
+            ), f"{family} L{level} differs when generated in isolation"
+
+
+def test_unknown_family_names_are_rejected() -> None:
+    with pytest.raises(ValueError, match="unknown task families"):
+        build_tasks(1, 5, 0, families=["reduce_along_dim", "nonexistent_family"])
+    with pytest.raises(ValueError, match="at least one family"):
+        build_tasks(1, 5, 0, families=[])
+    with pytest.raises(ValueError, match="nothing to train on"):
+        training_families(FAMILY_NAMES)
 
 
 def test_every_prompt_states_the_shape_the_grader_compares_against() -> None:

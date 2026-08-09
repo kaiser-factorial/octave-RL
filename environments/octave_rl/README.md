@@ -153,8 +153,57 @@ benchmark. Two consequences:
   Every score is in-distribution on the problem.
 - RL on this environment can drive toward memorising 30 function bodies, and a
   seed-disjoint evaluation will not detect that. It shows up as a high score
-  with no transfer. If you need to rule it out, evaluate on a different Octave
-  task set, not a different seed.
+  with no transfer.
+
+### Holding out a family gives you a real one
+
+Set `families` to exclude some. Because prompts are determined by
+(family, level), excluding a family is the only way to obtain a problem the
+policy has genuinely never seen:
+
+```toml
+[taskset]
+families = ["logical_index", "broadcast_arith", "sliding_window", "linsolve_tolerance",
+            "sequence_recurrence", "struct_cell_wrangle", "string_parse", "signal_identity"]
+```
+
+`DEFAULT_HELDOUT_FAMILIES` is `["reduce_along_dim", "reshape_permute"]`, and
+`training_families()` returns the complement. Both sit mid-difficulty for both
+measured models, so neither is floored nor ceilinged; `reduce_along_dim` has a
+near neighbour that stays in training (`struct_cell_wrangle` level 2+ is also a
+column-wise reduction) so it tests transfer of a practiced idiom, while
+`reshape_permute` has none. It is a default, not a recommendation — hold out
+the two hardest families and a real gain hides against the floor.
+
+Filtering *selects from* the full ten-family stream rather than cycling over
+your selection, so a family's k-th task is byte-identical whichever others are
+present. A train split and a holdout split drawn from one seed are therefore
+disjoint **and** each individually comparable to a full-pool measurement.
+Task ids come from the full stream, so they are stable but not contiguous
+within a filtered pool.
+
+**Use three splits, and do not blend them.**
+
+| split | families | seed | used for |
+|---|---|---|---|
+| train | the trained ones | training | rollouts and gradient |
+| validation | **the same trained ones** | held-out | level promotion, checkpoint selection |
+| test | **the held-out ones** | held-out | generalization — read rarely, ideally once |
+
+Two rules that are easy to get wrong:
+
+- **Report the splits as separate numbers, never as one weighted score.**
+  Averaging across families is what concealed a family stuck at 0.030 and a
+  level stuck at 0.000 in this environment for weeks; a blended score rebuilds
+  exactly that blindness.
+- **Never gate promotion or select checkpoints on the held-out families.** That
+  is selection leakage: you would be tuning against the thing you are claiming
+  is untouched. Use the validation split for every decision, and keep the test
+  split for the final read.
+
+Also measure the held-out families *before* training. Base rates run from 0.21
+to 0.75 across families, so an absolute post-training score is uninterpretable;
+the quantity that means something is the change from base on the same config.
 
 ## Reward
 
@@ -270,6 +319,13 @@ point. It is native `verifiers.v1` throughout and does not mix in the legacy v0
 - Verifiers: `>=0.2.1,<0.3` · NumPy: `>=2.0,<3`
 - Each task is fully determined by `(level, seed, task index)`.
 - Six hidden cases per task, generated with NumPy and stored with the task.
+
+## Changes in 0.3.0
+
+- `families` is now a taskset config field, so train and eval pools can be
+  disjoint by *problem* rather than only by hidden inputs. See "Holding out a
+  family gives you a real one" above. Backward compatible: omitting it selects
+  all ten families and reproduces 0.2.x exactly.
 
 ## Changes in 0.2.0
 

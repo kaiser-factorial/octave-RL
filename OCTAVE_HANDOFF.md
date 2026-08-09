@@ -831,21 +831,49 @@ metadata rather than a checkout or `PYTHONPATH` -- 16 rollouts, mean reward
 0.500, zero infrastructure errors. Every published file is byte-identical to
 its repository copy. See `artifacts/postfix-validation-20260809/RESULTS.md`.
 
-### Known gap: held-out pools share every prompt
+### Held-out pools share every prompt — and the fix that now exists
 
-Recorded here because it changes what an eval number means. A pool of 1,500
-tasks contains about **30 distinct prompts**, and all 30 appear in both the
-training and held-out pools; what the seed split holds out is the hidden test
-*inputs*, not the question. RL on this environment can therefore drive toward
-memorising 30 function bodies, and a seed-disjoint evaluation cannot detect it.
+A pool of 1,500 tasks contains about **30 distinct prompts**, because a prompt
+is determined by (family, level) and carries nothing task-specific. Training
+seed `0` and held-out seed `20260808` share 0 of 1,500 tasks and **30 of 30
+prompts**. The seed split holds out hidden test *inputs*, not questions, so RL
+here can drive toward memorising 30 function bodies and a seed-disjoint eval
+cannot detect it.
 
-The cheap fix, not yet done, is a `families` field on the taskset config so
-train and eval can be disjoint by *problem*: train on eight families, evaluate
-on the two held out. That is the only way this substrate can currently support
-a generalization claim. The deeper fix -- parameterising the descriptions so a
-family generates many distinct problems -- would rewrite every prompt and
-invalidate the 2026-08-09 paired comparison, so it should be a deliberate
-version boundary rather than a patch.
+**Version 0.3.0 adds a `families` taskset field**, which makes a held-out
+*problem* possible. `DEFAULT_HELDOUT_FAMILIES` is `["reduce_along_dim",
+"reshape_permute"]` — both mid-difficulty for both measured models, one with a
+near neighbour left in training (`struct_cell_wrangle` is also a column-wise
+reduction) and one without. `training_families()` returns the complement.
+Filtering selects from the full ten-family stream rather than cycling over the
+selection, so a family's k-th task is byte-identical whichever others are
+present; splits are disjoint *and* individually comparable to a full-pool
+measurement.
+
+Use three splits, and do not blend them:
+
+| split | families | seed | used for | config |
+|---|---|---|---|---|
+| train | the 8 | training | rollouts, gradient | set `families` in the prime-rl config |
+| validation | **the same 8** | held-out | level promotion, checkpoint selection | `configs/eval/octave-split-validation.toml` |
+| test | **the 2 held out** | held-out | generalization, read rarely | `configs/eval/octave-split-generalization.toml` |
+
+Two rules that are easy to get wrong, both learned the hard way here:
+
+- **Report the splits separately; never blend them into one weighted score.**
+  Averaging across families is exactly what concealed `linsolve_tolerance` at
+  0.030 and `struct_cell_wrangle` level 3 at 0.000 for weeks.
+- **Never gate level promotion or select checkpoints on the held-out
+  families.** That is selection leakage. Every decision uses the validation
+  split; the test split is read at the end.
+
+Measure the held-out families **before** training as well. Base rates run 0.21
+to 0.75 across families, so only the change from base on the same config means
+anything.
+
+The deeper fix — parameterising descriptions so a family yields many distinct
+problems — would rewrite every prompt and invalidate the 2026-08-09 paired
+comparison, so it belongs at a deliberate version boundary, not in a patch.
 
 ## Recommended next steps
 
