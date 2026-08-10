@@ -404,6 +404,26 @@ point. It is native `verifiers.v1` throughout and does not mix in the legacy v0
 - Each task is fully determined by `(level, seed, task index)`.
 - Six hidden cases per task, generated with NumPy and stored with the task.
 
+## Changes in 0.4.1 and 0.4.2
+
+Documentation only — no change to task generation, scoring, or any config
+field, so numbers measured on 0.4.0 remain comparable.
+
+- The quickstart named `<owner>` instead of `kaiser-factorial`, so the first
+  command a reader copies did not work.
+- Added a Contents table and a model-naming block: "Qwen" alone was ambiguous
+  between four models, and every Qwen here is a Qwen3.5, so they are written
+  Qwen *size* throughout.
+- Reordered the sections to follow use: run it, then what it measures, then how
+  it scores, then reference.
+- Two claims were stronger than the code supports and are now hedged with the
+  mechanism and the residual failure mode. The reward is not unhackable: a
+  family whose hidden cases were satisfiable by a degenerate answer would still
+  be gamed, which is what `scripts/validate_natural_solutions.py` exists to
+  catch.
+- The per-family table now states current difficulty only; the 0.1.0 → 0.2.0
+  movement it used to carry is in "Changes in 0.2.0".
+
 ## Changes in 0.4.0
 
 - The retry feedback is a composed diagnostic instead of raw Octave stdout. The
