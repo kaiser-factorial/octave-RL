@@ -1,7 +1,7 @@
 # Octave RL handoff
 
-Last updated: 2026-08-09 (taskset repair, publication, retry-scaffold measurement,
-metric correction swept through the smaller-model artifact)
+Last updated: 2026-08-10 (solved-only reward ablation prepared; parameterisation
+still not started)
 
 Every table produced across this work, in chronological order with its setup and
 the three corrections marked, is collected in the summary artifact's appendix:
@@ -17,6 +17,40 @@ WS3 (the Nemotron routing study this substrate now serves) keeps its design doc
 and gate pre-reads at `~/Projects/Nemotron/NemoH/RL investigation - PART B/`.
 The G1 pre-read there is written against that design doc's section numbers and
 is the right entry point for "what does this mean for Nemotron".
+
+## Start here: what changed on 2026-08-10
+
+### The solved-only reward ablation is built, tested, and not launched
+
+`reward_mode = "solved_only"` makes a fully correct answer worth 1.0 and
+everything else worth 0.0, still discounted 0.85 / 0.60 by attempt. Default
+stays `"case_fraction"`, so every historical config reproduces itself.
+
+**A premise worth correcting before reading the results.** The environment has
+had **no execution bonus and no structured-output bonus since the 2026-08-05
+hardening** — code that runs and is wrong has been worth exactly 0.0 for five
+days. The only thing this ablation removes is **per-case partial credit**. That
+is a real channel but a small one: on the 2026-07-29 distribution, 5 of 200
+rollouts were partially correct, carrying about **6% of total reward mass**.
+
+So the honest prior is that mean reward barely moves. What the ablation actually
+tests is whether that 6% is doing disproportionate *directional* work — pulling
+the policy toward "produce something that runs and is nearly right" instead of
+"be right". Removing it also removes within-group spread in every group where
+nobody fully solved the task, which means **more empty batches**, and that count
+is a result rather than a nuisance.
+
+- Configs: `configs/prime-rl/octave-{qwen-08b,qwen-4b,nemotron}-20step-solved-only.toml`.
+  The two Qwen ones are byte-identical to already-run controls except for
+  `output_dir` and the flag, so both are paired comparisons.
+- **Nemotron has never been trained here** — only evaluated through hosted
+  Prime Inference. Its config is a best guess, is marked UNVALIDATED in its own
+  header, and carries three hazards (renderer/thinking, 80 GB-class topology,
+  LoRA on an MoE). It needs a three-step smoke and its own control arm.
+- Read outcomes from the new `solved` metric and `raw_case_fraction`. The two
+  arms define reward differently, so their reward columns are **not comparable**.
+- Not launched: the session that prepared this had no GPU, no `prime` CLI and no
+  Prime credential.
 
 ## Start here: what changed on 2026-08-09
 
