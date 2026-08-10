@@ -87,6 +87,17 @@ class OctaveData(vf.TaskData):
     tolerance: float
     require_vectorized: bool
     reference: str
+    # Which of the family's eight problems this task is. Empty for the families
+    # not yet on the 0.5.0 variant form, which still contribute one problem per
+    # level. Carried into the trace so a per-variant breakdown is possible
+    # without regenerating the pool and hoping the seed matches.
+    variant: str = ""
+    # The naive solution: what a competent Octave programmer writes from the
+    # description alone, with no defensive coercion. Never shown to the model --
+    # it is the input to `scripts/validate_natural_solutions.py`, the only check
+    # that has ever caught a task solvable solely through an undisclosed
+    # convention.
+    natural: str = ""
 
 
 async def execute_candidate_in_sandbox(

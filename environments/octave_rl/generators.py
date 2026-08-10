@@ -6,8 +6,23 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+from families import reduce_along_dim as _reduce_along_dim_variants
+from specs import Variant, resolve_variants, variant_for_index
 
 Task = dict[str, Any]
+
+# Families converted to the 0.5.0 variant form, which contribute eight distinct
+# problems per level instead of one. The rest still use the fixed `DESCRIPTIONS`
+# table below.
+#
+# This dict is the staged conversion's progress marker, and it is deliberately
+# explicit rather than an import that fails soft: a family silently falling back
+# to the one-prompt path would restore exactly the defect this change removes,
+# and would do it invisibly. When all ten names are here, `DESCRIPTIONS` and
+# `_row` go away.
+VARIANT_MODULES: dict[str, Any] = {
+    "reduce_along_dim": _reduce_along_dim_variants,
+}
 
 
 def _shape_sentence(cases: list[dict[str, Any]]) -> str:
@@ -33,6 +48,43 @@ def _shape_sentence(cases: list[dict[str, Any]]) -> str:
             return f"Return a matrix with {heights.pop()} rows."
         return "Return a 2-D matrix."
     return "Return a row vector (1-by-N)."
+
+
+def _row_from_variant(variant: Variant, family: str, level: int) -> Task:
+    """Wrap one rendered variant in the row shape the taskset consumes.
+
+    The prompt is assembled exactly as `_row` assembles it, including
+    `_shape_sentence`, so a converted family's prompts differ from an
+    unconverted one's only in the sentence that states the task. That keeps the
+    staged conversion from confounding a measurement with a formatting change.
+
+    `info` gains two fields. `variant` is what a per-variant breakdown and a
+    variant holdout key on. `natural` carries the naive solution to
+    `validate_natural_solutions.py`, which is the only check that has ever
+    caught a task solvable solely through an undisclosed convention -- it has to
+    travel with the task, because a lookup table beside the generator is what
+    silently covered one variant per family and passed the other seven.
+    """
+    prompt = (
+        f"Write this GNU Octave function:\n\n    {variant.signature}\n\n"
+        f"{variant.description}\n"
+        f"{_shape_sentence(variant.cases)}\n"
+        f"Return exactly one fenced `octave` code block. "
+        f"Hidden tests include edge cases."
+    )
+    fn = variant.signature.split("=")[1].split("(")[0].strip()
+    return {
+        "prompt": [{"role": "user", "content": prompt}],
+        "info": {
+            "family": family, "level": level, "fn_name": fn,
+            "signature": variant.signature, "cases": variant.cases,
+            "tolerance": variant.tolerance,
+            "require_vectorized": variant.vectorized,
+            "variant": variant.key, "natural": variant.natural,
+        },
+        "task": f"octave-l{level}-{family}-{variant.key}",
+        "_reference": variant.reference,
+    }
 
 
 def _row(family, level, signature, cases, reference, *, tolerance=1e-9, vectorized=False):
@@ -333,6 +385,42 @@ def resolve_families(families: list[str] | None) -> list[str]:
     return list(dict.fromkeys(families))
 
 
+def declared_variants() -> dict[str, list[str]]:
+    """Every ``family -> [variant key]`` a converted family offers.
+
+    Unconverted families are absent rather than present-and-empty, so a caller
+    can tell "this family has one problem per level" from "this family has no
+    problems", and a variant selection naming an unconverted family fails loudly
+    instead of silently selecting nothing.
+    """
+    return {
+        name: list(module.VARIANT_KEYS)
+        for name, module in VARIANT_MODULES.items()
+    }
+
+
+# The default variant holdout: the last two variants of each converted family.
+#
+# **Provisional, and chosen without measurement.** The family holdout beside it
+# was picked from measured per-family pass rates, so that neither held-out family
+# sits on the floor or the ceiling. No per-variant pass rates exist yet -- that
+# sweep is step 4 of the measurement plan in `PARAMETERIZATION_DESIGN.md` -- so
+# this is a positional default, not a recommendation. Re-choose it once the
+# sweep lands, and do not quote a generalization number that rests on it before
+# then.
+#
+# Two of eight holds out a quarter of the problems while leaving every family in
+# training, where the family holdout costs a fifth of training coverage to hold
+# out any problem at all.
+DEFAULT_HELDOUT_VARIANTS: list[str] = [
+    f"{family}:{key}"
+    for family, keys in {
+        name: list(module.VARIANT_KEYS) for name, module in VARIANT_MODULES.items()
+    }.items()
+    for key in keys[-2:]
+]
+
+
 def training_families(heldout: list[str] | None = None) -> list[str]:
     """The complement of a holdout, in canonical order."""
     excluded = set(resolve_families(heldout if heldout is not None else DEFAULT_HELDOUT_FAMILIES))
@@ -349,26 +437,49 @@ def build_tasks(
     require_vectorized=False,
     include_reference=False,
     families=None,
+    variants=None,
 ):
-    """Generate ``num_tasks`` tasks, optionally restricted to some families.
+    """Generate ``num_tasks`` tasks, optionally restricted to families or variants.
 
-    Restricting families *filters* the full ten-family stream rather than
-    cycling over the selection, so a given family's k-th task is byte-identical
-    whichever other families are present. That is what makes a train split and
-    a holdout split drawn from one seed genuinely disjoint *and* individually
-    comparable to a full-pool measurement. Task indices come from the full
-    stream, so ids stay stable and are not contiguous within a filtered pool.
+    Restricting *filters* the full ten-family stream rather than cycling over the
+    selection, so a given family's k-th task is byte-identical whichever other
+    families are present, and whichever variants are selected. That is what makes
+    a train split and a holdout split drawn from one seed genuinely disjoint *and*
+    individually comparable to a full-pool measurement. Task indices come from the
+    full stream, so ids stay stable and are not contiguous within a filtered pool.
+
+    Both filters run *after* generation for the same reason: every task is drawn
+    from the shared rng whether or not it is kept, so a selection cannot shift the
+    stream for the tasks that remain. Generating only the selected tasks would be
+    faster and would silently make every split incomparable with every other.
+
+    ``variants`` names ``"family:key"`` pairs and applies only to converted
+    families; an unconverted family contributes its single problem per level
+    regardless. ``None`` selects everything.
     """
     selected = set(resolve_families(families))
+    selected_variants = resolve_variants(declared_variants(), variants)
     rng = np.random.default_rng(seed)
     rows = []
     index = 0
     while len(rows) < num_tasks:
-        family = FAMILIES[index % len(FAMILIES)]
-        task = family(rng, level)
+        position = index % len(FAMILIES)
+        family = FAMILIES[position]
+        name = family.__name__
+        module = VARIANT_MODULES.get(name)
+        if module is None:
+            task = family(rng, level)
+            key = None
+        else:
+            # The variant follows the task's ordinal within its own family's
+            # stream, not an rng draw. See `specs.variant_for_index`.
+            key = variant_for_index(module.VARIANT_KEYS, index // len(FAMILIES))
+            task = _row_from_variant(module.build(rng, level, key), name, level)
         task["task"] += f"-{index:05d}"
         index += 1
-        if family.__name__ not in selected:
+        if name not in selected:
+            continue
+        if key is not None and key not in selected_variants.get(name, []):
             continue
         if require_vectorized:
             task["info"]["require_vectorized"] = True

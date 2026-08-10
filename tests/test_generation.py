@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,9 +14,11 @@ import octave_rl as octave_environment
 import pytest
 from generators import (
     DEFAULT_HELDOUT_FAMILIES,
+    DEFAULT_HELDOUT_VARIANTS,
     DESCRIPTIONS,
     FAMILY_NAMES,
     build_tasks,
+    declared_variants,
     training_families,
 )
 from harness import (
@@ -35,6 +38,7 @@ from harness import (
     parse_harness_result,
     result_marker,
 )
+from specs import complement
 from octave_rl import (
     attempt_multiplier,
     candidate_record_matches,
@@ -148,19 +152,52 @@ def test_every_prompt_states_the_shape_the_grader_compares_against() -> None:
                     assert claim == f"Return a matrix with {rows} rows.", where
 
 
-def test_level_three_descriptions_restate_their_own_task() -> None:
+_STOPWORDS = {
+    "without", "loops", "for/while", "no", "not", "use", "do",
+    "return", "the", "a", "an", "of", "and", "that", "in", "to", "its",
+}
+
+
+def _content_words(text: str) -> set[str]:
+    cleaned = text.lower().replace(",", " ").replace(";", " ").replace(".", " ")
+    return {word for word in cleaned.split() if word not in _STOPWORDS}
+
+
+def _descriptions_by_problem(level: int) -> dict[tuple[str, str], str]:
+    """`(family, variant)` -> the description line of its generated prompt.
+
+    Read off the *generated prompt*, not off a table beside the generator. The
+    earlier version of this test read `DESCRIPTIONS` directly, which was
+    adequate while a family had one prompt per level and became a blind spot the
+    moment it had eight: the dict a converted family no longer consults would
+    have gone on passing forever.
+    """
+    found: dict[tuple[str, str], str] = {}
+    for task in build_tasks(level, 400, 5, include_reference=True):
+        lines = task["prompt"][0]["content"].splitlines()
+        # Layout is fixed by `_row`/`_row_from_variant`: heading, blank,
+        # signature, blank, description..., shape sentence, closing line.
+        description = "\n".join(lines[4:-2])
+        found[(task["info"]["family"], task["info"].get("variant", ""))] = description
+    return found
+
+
+def test_level_three_restates_its_own_task_for_every_problem() -> None:
     """Level 3 adds a constraint; it must not drop the task definition.
 
-    `struct_cell_wrangle` level 3 once read only "Return [column minima;
-    column maxima] without for/while loops", leaving the misleading family name
-    as the model's only clue about the input type. It scored 0.000 against
-    level 2's 0.792 on the same underlying task.
+    `struct_cell_wrangle` level 3 once read only "Return [column minima; column
+    maxima] without for/while loops", leaving the misleading family name as the
+    model's only clue about the input type. It scored 0.000 against level 2's
+    0.792 on the same underlying task.
+
+    With eight variants per family this has eight times the surface, and a
+    variant that drops its task at level 3 would be invisible in an aggregate
+    per-family score.
     """
     # Families whose level 3 is level 2 plus a vectorization constraint. The
     # rest change the task itself between those levels -- linsolve_tolerance
-    # switches to [x; norm(A*x-b)], sliding_window from mean to median,
-    # reshape_permute to a different permutation, string_parse to decimals --
-    # so their wording legitimately differs.
+    # switches to [x; norm(A*x-b)], reshape_permute to a different permutation,
+    # string_parse to decimals -- so their wording legitimately differs.
     same_task_at_level_three = {
         "reduce_along_dim",
         "logical_index",
@@ -169,17 +206,109 @@ def test_level_three_descriptions_restate_their_own_task() -> None:
         "struct_cell_wrangle",
         "signal_identity",
     }
-    stopwords = {"without", "loops", "for/while", "no", "return", "the", "a", "of", "and"}
-
-    def content_words(text: str) -> set[str]:
-        cleaned = text.lower().replace(",", " ").replace(";", " ").replace(".", " ")
-        return {word for word in cleaned.split() if word not in stopwords}
-
-    for family in sorted(same_task_at_level_three):
-        descriptions = DESCRIPTIONS[family]
-        missing = content_words(descriptions[1]) - content_words(descriptions[2])
+    level_two = _descriptions_by_problem(2)
+    level_three = _descriptions_by_problem(3)
+    checked = 0
+    for problem, description in sorted(level_two.items()):
+        family, _ = problem
+        if family not in same_task_at_level_three:
+            continue
+        assert problem in level_three, f"{problem} exists at L2 but not L3"
+        missing = _content_words(description) - _content_words(level_three[problem])
         assert not missing, (
-            f"{family} level 3 drops terms its level 2 states: {sorted(missing)}"
+            f"{family} variant {problem[1]!r} level 3 drops terms its level 2 "
+            f"states: {sorted(missing)}"
+        )
+        checked += 1
+    # Guard the guard: a change that stopped generating variants would make the
+    # loop body run zero times and the test would still pass.
+    assert checked >= len(same_task_at_level_three), checked
+
+
+def test_a_family_generates_the_same_tasks_whichever_variants_are_present() -> None:
+    """The family invariant, extended to the new filter.
+
+    A variant holdout is only a holdout if the kept tasks are the same objects a
+    full-pool measurement would have produced. Selecting variants *before*
+    generation -- the obvious optimisation -- would consume the rng differently
+    and silently make every split incomparable with every other.
+    """
+    kept = complement(declared_variants(), DEFAULT_HELDOUT_VARIANTS)
+    for level in (1, 2, 3):
+        # Twice the row count: dropping variants makes the stream run further
+        # to reach 300 kept rows, so a shorter comparison pool would simply not
+        # contain the later indices.
+        full = {
+            row["task"]: row
+            for row in build_tasks(level, 600, 21, include_reference=True)
+        }
+        held_keys = {name.split(":", 1)[1] for name in DEFAULT_HELDOUT_VARIANTS}
+        for selection, wanted in ((kept, False), (DEFAULT_HELDOUT_VARIANTS, True)):
+            filtered = build_tasks(
+                level, 300, 21, include_reference=True, variants=selection
+            )
+            converted = [
+                row for row in filtered
+                if row["info"]["family"] in declared_variants()
+            ]
+            assert converted, "no converted family survived the filter"
+            for row in converted:
+                assert (row["info"]["variant"] in held_keys) is wanted
+                twin = full[row["task"]]
+                assert json.dumps(row, sort_keys=True) == json.dumps(
+                    twin, sort_keys=True
+                ), f"{row['task']} differs when generated under a variant filter"
+
+
+def test_every_variant_is_drawn_and_counts_are_near_exact() -> None:
+    """Round-robin, not sampled: per-variant counts are exact, not multinomial.
+
+    At eight variants and fifty tasks per family, an rng-drawn variant would
+    give Binomial(50, 1/8) counts -- a spread of roughly 6 +/- 2.4, and the
+    occasional variant missing entirely from a pool. Per-variant pass rates are
+    the measurement this change exists to enable, so the counts are made exact
+    instead.
+    """
+    for family, keys in declared_variants().items():
+        counts = Counter(
+            task["info"]["variant"]
+            for task in build_tasks(1, 500, 0)
+            if task["info"]["family"] == family
+        )
+        assert set(counts) == set(keys), f"{family}: {sorted(counts)}"
+        assert max(counts.values()) - min(counts.values()) <= 1, dict(counts)
+
+
+def test_a_converted_family_ships_a_naive_solution_with_every_task() -> None:
+    """`natural` travels with the task, because a table beside it did not.
+
+    `validate_natural_solutions.py` is the only check that has ever caught a
+    task solvable solely through an undisclosed convention. It used to hold one
+    naive solution per (family, level), which would cover one variant of eight
+    and report PASS for the other seven.
+    """
+    for level in (1, 2, 3):
+        for task in build_tasks(level, 200, 3, include_reference=True):
+            info = task["info"]
+            if info["family"] not in declared_variants():
+                continue
+            natural = info.get("natural", "")
+            assert natural, f"{task['task']} carries no naive solution"
+            assert info["fn_name"] in natural
+            # A naive solution that coerces is not naive. The whole signal is
+            # that a competent reader's first attempt passes as written.
+            assert "(:)" not in natural, f"{task['task']} naive solution coerces"
+
+
+def test_unknown_variant_names_are_rejected() -> None:
+    with pytest.raises(ValueError, match="unknown task variants"):
+        build_tasks(1, 5, 0, variants=["reduce_along_dim:no-such-variant"])
+    with pytest.raises(ValueError, match="family:key"):
+        build_tasks(1, 5, 0, variants=["mean-columns"])
+    with pytest.raises(ValueError, match="nothing to train on"):
+        complement(
+            declared_variants(),
+            [f"{fam}:{key}" for fam, keys in declared_variants().items() for key in keys],
         )
 
 
