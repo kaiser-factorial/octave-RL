@@ -1,0 +1,936 @@
+{
+  "octave": "GNU Octave, version 10.2.0",
+  "interpreter": "/usr/local/bin/octave-cli",
+  "rootfs": "/opt/octave-rootfs",
+  "network_isolated": true,
+  "isolation_prefix": "/usr/bin/unshare --net --map-root-user --",
+  "filesystem_isolated": true,
+  "seed": 314159,
+  "num_tasks_per_level": 500,
+  "levels": [
+    {
+      "level": 1,
+      "tasks": 500,
+      "validated_tasks": 500,
+      "unvalidated_tasks": 0,
+      "families": {
+        "reduce_along_dim": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "mean-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "mean-rows": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "median-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "median-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sum-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "max-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "min-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "range-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "variant",
+          "paths": {
+            "variant": 50
+          }
+        },
+        "logical_index": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "reshape_permute": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "broadcast_arith": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "sum": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "difference": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "product": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "squared-difference": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "absolute-difference": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "max": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "min": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sum-of-squares": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "variant",
+          "paths": {
+            "variant": 50
+          }
+        },
+        "sliding_window": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "linsolve_tolerance": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "sequence_recurrence": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "struct_cell_wrangle": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "string_parse": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "signal_identity": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        }
+      },
+      "unvalidated_families": [],
+      "variant_families": [
+        "broadcast_arith",
+        "reduce_along_dim"
+      ],
+      "legacy_families": [
+        "linsolve_tolerance",
+        "logical_index",
+        "reshape_permute",
+        "sequence_recurrence",
+        "signal_identity",
+        "sliding_window",
+        "string_parse",
+        "struct_cell_wrangle"
+      ],
+      "legacy_tasks": 400,
+      "failures": [],
+      "unvalidated": [],
+      "ok": true
+    },
+    {
+      "level": 2,
+      "tasks": 500,
+      "validated_tasks": 500,
+      "unvalidated_tasks": 0,
+      "families": {
+        "reduce_along_dim": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "mean-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "mean-rows": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "median-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "median-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sum-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "max-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "min-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "range-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "variant",
+          "paths": {
+            "variant": 50
+          }
+        },
+        "logical_index": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "reshape_permute": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "broadcast_arith": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "sum": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "difference": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "product": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "squared-difference": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "absolute-difference": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "max": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "min": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sum-of-squares": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "variant",
+          "paths": {
+            "variant": 50
+          }
+        },
+        "sliding_window": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "linsolve_tolerance": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "sequence_recurrence": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "struct_cell_wrangle": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "string_parse": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "signal_identity": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        }
+      },
+      "unvalidated_families": [],
+      "variant_families": [
+        "broadcast_arith",
+        "reduce_along_dim"
+      ],
+      "legacy_families": [
+        "linsolve_tolerance",
+        "logical_index",
+        "reshape_permute",
+        "sequence_recurrence",
+        "signal_identity",
+        "sliding_window",
+        "string_parse",
+        "struct_cell_wrangle"
+      ],
+      "legacy_tasks": 400,
+      "failures": [],
+      "unvalidated": [],
+      "ok": true
+    },
+    {
+      "level": 3,
+      "tasks": 500,
+      "validated_tasks": 500,
+      "unvalidated_tasks": 0,
+      "families": {
+        "reduce_along_dim": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "mean-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "mean-rows": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "median-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "median-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sum-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "max-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "min-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "range-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "variant",
+          "paths": {
+            "variant": 50
+          }
+        },
+        "logical_index": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "reshape_permute": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "broadcast_arith": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "sum": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "difference": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "product": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "squared-difference": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "absolute-difference": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "max": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "min": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sum-of-squares": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "variant",
+          "paths": {
+            "variant": 50
+          }
+        },
+        "sliding_window": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "linsolve_tolerance": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "sequence_recurrence": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "struct_cell_wrangle": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "string_parse": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        },
+        "signal_identity": {
+          "passed": 300,
+          "total": 300,
+          "variants": {
+            "(legacy)": {
+              "passed": 300,
+              "total": 300,
+              "tasks": 50,
+              "failing_tasks": 0
+            }
+          },
+          "tasks": 50,
+          "validated_tasks": 50,
+          "unvalidated_tasks": 0,
+          "path": "legacy",
+          "paths": {
+            "legacy": 50
+          }
+        }
+      },
+      "unvalidated_families": [],
+      "variant_families": [
+        "broadcast_arith",
+        "reduce_along_dim"
+      ],
+      "legacy_families": [
+        "linsolve_tolerance",
+        "logical_index",
+        "reshape_permute",
+        "sequence_recurrence",
+        "signal_identity",
+        "sliding_window",
+        "string_parse",
+        "struct_cell_wrangle"
+      ],
+      "legacy_tasks": 400,
+      "failures": [],
+      "unvalidated": [],
+      "ok": true
+    }
+  ],
+  "elapsed_seconds": 223.7,
+  "unvalidated_families": [],
+  "unvalidated_tasks": 0,
+  "failed_variants": [],
+  "variant_families": [
+    "broadcast_arith",
+    "reduce_along_dim"
+  ],
+  "legacy_families": [
+    "linsolve_tolerance",
+    "logical_index",
+    "reshape_permute",
+    "sequence_recurrence",
+    "signal_identity",
+    "sliding_window",
+    "string_parse",
+    "struct_cell_wrangle"
+  ],
+  "legacy_tasks": 1200,
+  "stale_legacy_entries": [],
+  "ok": true
+}
