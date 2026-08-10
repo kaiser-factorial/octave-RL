@@ -134,6 +134,17 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=HELD_OUT_SEED)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=MAX_TOKENS,
+        help=(
+            "Completion cap. Raise it when measuring prompt legibility: a "
+            "rollout that hits the cap is a structural zero, not a capability "
+            "result, and the 0.5.0 pool truncated 21%% of reshape_permute "
+            "attempts at 1536. Report the truncation share with any score."
+        ),
+    )
+    parser.add_argument(
         "--families",
         nargs="+",
         default=None,
@@ -216,7 +227,7 @@ def main() -> int:
                 seed=args.seed,
                 temperature=temperature,
                 families=families_line,
-                max_tokens=MAX_TOKENS,
+                max_tokens=args.max_tokens,
                 reasoning_effort=args.reasoning_effort,
                 output_dir=str(args.output / name),
             )
@@ -227,6 +238,7 @@ def main() -> int:
     print(f"model     : {args.model}")
     print(f"families  : {', '.join(families) if families else 'all ten'}")
     print(f"thinking  : off (reasoning_effort={args.reasoning_effort!r})")
+    print(f"max tokens: {args.max_tokens}")
     print(f"cells     : {', '.join(args.cells)}")
     total = sum(args.num_tasks * (args.num_rollouts if j["cell"] == "sampled" else 1) for j in jobs)
     print(f"rollouts  : {total}")

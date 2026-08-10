@@ -43,6 +43,7 @@ import argparse
 import glob
 import json
 import math
+import re
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -52,6 +53,9 @@ from typing import Any
 # threshold with a theory behind it: a screen, set where "no model ever solved
 # this" stops being plausible difficulty and starts being a broken prompt.
 SUSPECT_SOLVE_RATE = 0.02
+
+# Trailing "-l1" / "-l2" / "-l3" on an output directory name.
+LEVEL_SUFFIX = re.compile(r"-l\d+$")
 
 
 def load(root: Path) -> dict[tuple[str, str, str, int], dict[str, list]]:
@@ -66,7 +70,14 @@ def load(root: Path) -> dict[tuple[str, str, str, int], dict[str, list]]:
         lambda: defaultdict(list)
     )
     for path in glob.glob(str(root / "**" / "traces.jsonl"), recursive=True):
-        run = Path(path).parent.parent.name
+        # The run is the *model*, and the directory it writes to is named
+        # "<model>-<cell>-l<level>". Taking `parent.parent` here -- copied from
+        # `family_breakdown.py`, whose layout has one more directory -- silently
+        # collapsed every model into a single row named after the sweep root,
+        # which is the worst possible failure for a script whose whole purpose
+        # is comparing models. The level is already part of the key, so strip it
+        # to group a model's three cells together.
+        run = LEVEL_SUFFIX.sub("", Path(path).parent.name)
         with open(path) as handle:
             for line in handle:
                 trace = json.loads(line)
@@ -78,8 +89,18 @@ def load(root: Path) -> dict[tuple[str, str, str, int], dict[str, list]]:
                     data.get("variant") or "(unconverted)",
                     data["level"],
                 )
+                # A rollout that hit the completion cap scored zero for a
+                # reason unrelated to whether it understood the prompt. Carried
+                # per cell because a low solve rate beside a high truncation
+                # share is not a capability result -- it is a budget result, and
+                # the two have been confused here before.
+                truncated = any(
+                    call.get("finish_reason") == "length"
+                    for call in (trace.get("calls") or [])
+                )
                 cells[key][data["name"]].append(
                     {
+                        "truncated": float(truncated),
                         # `solved` is undiscounted and identical in both reward
                         # modes. Fall back to thresholding raw_case_fraction for
                         # traces written before the metric existed -- never the
@@ -107,7 +128,10 @@ def summarize(per_task: dict[str, list]) -> dict[str, Any]:
     task_means = {
         name: {
             field: _mean(rollout[field] for rollout in rollouts)
-            for field in ("solved", "raw", "exec", "correct_given_executed", "format_ok")
+            for field in (
+                "solved", "raw", "exec", "correct_given_executed",
+                "format_ok", "truncated",
+            )
         }
         for name, rollouts in per_task.items()
     }
@@ -126,6 +150,7 @@ def summarize(per_task: dict[str, list]) -> dict[str, Any]:
             task["correct_given_executed"] for task in task_means.values()
         ),
         "format_ok": _mean(task["format_ok"] for task in task_means.values()),
+        "truncated": _mean(task["truncated"] for task in task_means.values()),
     }
 
 
@@ -155,7 +180,7 @@ def main() -> int:
         print(f"\n===== {run} =====")
         header = (
             f"{'family':<20}{'variant':<22}{'lvl':>4}{'n':>5}"
-            f"{'solved':>9}{'+/-':>7}{'exec':>7}{'c|exec':>8}{'fmt':>6}"
+            f"{'solved':>9}{'+/-':>7}{'exec':>7}{'c|exec':>8}{'fmt':>6}{'trunc':>7}"
         )
         print(header + (f"{'was':>9}" if prior else ""))
         rows = [key for key in cells if key[0] == run]
@@ -170,7 +195,7 @@ def main() -> int:
                 f"{family:<20}{variant:<22}{level:>4}{stats['rollouts']:>5}"
                 f"{stats['solved']:>9.3f}{stats['stderr']:>7.3f}"
                 f"{stats['exec']:>7.3f}{stats['correct_given_executed']:>8.3f}"
-                f"{stats['format_ok']:>6.2f}"
+                f"{stats['format_ok']:>6.2f}{stats['truncated']:>7.2f}"
             )
             if key in prior:
                 line += f"{prior[key]['solved']:>9.3f}"
@@ -180,12 +205,19 @@ def main() -> int:
         print(f"\n{len(suspect)} variant-levels at or below {args.suspect_below:.2f} solve:")
         for run, family, variant, level, stats in suspect:
             # The distinction that decides what to do about it.
-            shape = (
-                "code runs and disagrees with the grader -- suspect an "
-                "undisclosed convention"
-                if stats["exec"] > 0.5
-                else "code does not run -- suspect the prompt is unreadable"
-            )
+            if stats["truncated"] > 0.2:
+                shape = (
+                    f"{stats['truncated']:.0%} of rollouts hit the completion "
+                    "cap -- this is a budget result, not a capability one; "
+                    "re-measure with --max-tokens raised before reading it"
+                )
+            elif stats["exec"] > 0.5:
+                shape = (
+                    "code runs and disagrees with the grader -- suspect an "
+                    "undisclosed convention"
+                )
+            else:
+                shape = "code does not run -- suspect the prompt is unreadable"
             print(f"  {family}:{variant} L{level} ({run}): {shape}")
         print(
             "\nA naive solution passing says the prompt is satisfiable, not that a\n"
