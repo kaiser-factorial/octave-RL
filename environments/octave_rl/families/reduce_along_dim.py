@@ -38,7 +38,6 @@ prompt does not describe.
 from __future__ import annotations
 
 import numpy as np
-
 from specs import Variant
 
 # (statistic, axis). Order is the round-robin order and is part of the split
@@ -84,7 +83,8 @@ def _describe(key: str, level: int) -> str:
     Level 3 saying only "...without loops" is what let `struct_cell_wrangle`
     level 3 fall from 0.792 to 0.000 while models guessed at the task from the
     family name alone. Guarded by
-    `test_level_three_descriptions_restate_their_own_task`.
+    `test_level_three_restates_its_own_task_for_every_problem`, which reads the
+    generated prompt rather than a table, so it sees all eight variants.
     """
     statistic, axis = _parse(key)
     english = _STATISTICS[statistic][0]

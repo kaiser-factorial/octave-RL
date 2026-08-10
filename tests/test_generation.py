@@ -15,7 +15,6 @@ import pytest
 from generators import (
     DEFAULT_HELDOUT_FAMILIES,
     DEFAULT_HELDOUT_VARIANTS,
-    DESCRIPTIONS,
     FAMILY_NAMES,
     build_tasks,
     declared_variants,
@@ -38,7 +37,6 @@ from harness import (
     parse_harness_result,
     result_marker,
 )
-from specs import complement
 from octave_rl import (
     attempt_multiplier,
     candidate_record_matches,
@@ -46,6 +44,7 @@ from octave_rl import (
     execute_candidate_in_sandbox,
     execute_feedback_in_new_sandbox,
 )
+from specs import complement
 
 
 def test_seeded_generation_is_reproducible() -> None:
