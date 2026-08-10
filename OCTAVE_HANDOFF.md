@@ -78,6 +78,30 @@ now follows the hint rather than the attempt number.
 None of that moved scores, and it should not be expected to. It is correct
 hygiene, not a lever.
 
+### The next big change: parameterised descriptions
+
+**Design document: `PARAMETERIZATION_DESIGN.md`.** Written as the entry point
+for a fresh session; read it after this section.
+
+The short version: a 1,500-task pool contains **30 distinct prompts**, and both
+seeds share all 30. That is why a seed split holds out hidden inputs rather than
+questions, and it is part of why the multi-turn scaffold behaves like best-of-N
+— with 30 problems, resampling is cheap. Making the description depend on a
+drawn spec (which statistic, which axis, which operator) is the fix.
+
+The one constraint that matters more than the rest:
+`scripts/validate_natural_solutions.py` **hardcodes one naive solution per
+family and level**. The moment a family generates several distinct problems it
+silently covers one of them and passes the rest. It must be parameterised from
+the same spec that produces the description and the reference — *before* any
+variant ships. That validator is the only check that has ever caught the
+"solvable only via an undisclosed convention" defect, which has now occurred
+three times.
+
+Start with three families (`reduce_along_dim`, `broadcast_arith`,
+`sliding_window`), measure, then extend. Roughly $1.50 of compute end to end;
+the design work is the expensive part.
+
 ### What this means for the next run
 
 - **Model:** Qwen3.5-0.8B. Level 1, three attempts. It sits in the 10-35% band
