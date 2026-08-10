@@ -44,10 +44,13 @@ rather than ``1e-7``.
 
 That is a strictly weaker constraint on the *solver*: a candidate that reaches
 for ``real(ifft(fft(a).*fft(b)))`` still passes, because its round-off is many
-orders of magnitude inside the tolerance -- measured at worst ``4.5e-12``
-absolute (relative ``3.4e-16``) over all eight variants and three levels on the
-pinned Octave 10.2.0, against a ``1e-9`` budget. What changed is that the
-*task* no longer depends on that.
+orders of magnitude inside the tolerance. Measured on the pinned Octave 10.2.0,
+an FFT-based solution for all eight variants over three levels and three seeds
+returns values differing from the expected ones by at most ``2.3e-13``
+absolute, ``1.1e-13`` after the grader's ``max(1, |expected|)`` scaling --
+roughly 8,800x inside the ``1e-9`` budget. The direct forms below, reference and
+naive alike, differ by exactly ``0``. What changed is that the *task* no longer
+depends on which of the two ran.
 
 ## The level ladder
 
@@ -486,8 +489,8 @@ def _draw_case(rng: np.random.Generator) -> dict:
     # `mod(k, n) == 0` is the identity shift; `mod(k, n) == n/2` makes the
     # forward and backward shifts agree, which would let a solution with the
     # direction reversed score full marks. Walk to the next integer avoiding
-    # both -- n >= 5 leaves at least three admissible residues, so this
-    # terminates in at most two steps.
+    # both. Two consecutive integers can only be forbidden together when
+    # n/2 == 1, so at n >= 5 this walks at most one step.
     k = shift
     while k % n == 0 or (n % 2 == 0 and k % n == n // 2):
         k += 1

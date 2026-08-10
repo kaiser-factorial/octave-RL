@@ -37,37 +37,39 @@ magnitudes would make the comparison depend on the relative tolerance rather
 than on the algorithm, so the draws are bounded to keep **every expected value a
 small exact integer**:
 
-    n in 5..9,  a, b, d in [-4, 4],  p, q in {-2, -1, 1, 2}
+    n in 7..9,  a, b, d in [-4, 4],  p, q in {-2, -1, 1, 2}
 
-That space is finite (5 x 9 x 9 x 9 x 4 x 4 = 58,320 parameter tuples), so the
-worst case is not sampled but **enumerated**. Over every tuple, every order,
-every level and all four return modes, the largest magnitude any expected value
+That space is finite -- 3 x 9 x 9 x 9 x 4 x 4 = **34,992 parameter tuples** -- so
+the worst case is not sampled but **enumerated**. Over every tuple, every order,
+every level and all four return modes, the largest magnitude an expected value
 can take is:
 
     order 1, level 1     4,052        order 2, level 1      9,792
     order 1, level 2+    5,522        order 2, level 2+    12,690
 
-so **12,690 is the ceiling for the whole family**, attained at
-``n=9, a=b=4, p=q=2, d=-4`` by the order-2 ``cumulative``/``total`` modes. Every
-value is an integer produced by integer additions and multiplications; doubles
-represent every integer up to ``2^53 ~ 9.0e15`` exactly, twelve orders of
-magnitude above the ceiling, so both sides of every comparison are bit-identical
-and ``tolerance`` is never exercised. Widening to ``n <= 10`` raises the ceiling
-to 34,702 -- still exact, but the bound was chosen to leave the largest slack
-that keeps the sequences interesting rather than the largest numbers that still
-happen to work.
+so **12,690 is the ceiling for the whole family** (attained at ``n=9``,
+``a=b=4``, ``p=q=2``, by the order-2 ``cumulative`` and ``total`` modes), and a
+2,000-task census per variant reaches exactly that number, so the bound is tight
+rather than generous. Every value is an integer produced by integer additions
+and multiplications; doubles represent every integer up to ``2^53 ~ 9.0e15``
+exactly, eleven orders of magnitude above the ceiling, so both sides of every
+comparison are bit-identical and the ``1e-9`` relative tolerance is **never**
+exercised -- no case here can be decided by a floating-point disagreement
+between NumPy and Octave. Allowing ``n = 10`` would raise the ceiling to 34,702
+and ``n = 11`` to 94,847; both are still exact, and both were passed over
+because the extra length buys nothing the fourth return mode does not already
+buy.
 
 ``p`` and ``q`` exclude **0** on purpose. ``q = 0`` turns an order-2 recurrence
 into an order-1 one, and ``p = 0`` makes order 1 constant from its second term:
-in both cases a solution that ignores one of the two terms of the recurrence
-scores the case, and neither degeneracy is anything the prompt describes.
+in both cases a solution that drops one term of its own recurrence scores the
+case, and neither degeneracy is anything the prompt describes.
 
-``n >= 5`` is stated in the prompt *and* enforced in the draws, which disposes of
-the edge the brief names: "the first 1 term" of a two-term recurrence would need
-a convention for what happens when ``n`` is smaller than the number of seeds, and
-no prompt here states one. It also guarantees that level 2's extra term (which
-first applies at ``i = 2`` for order 1 and ``i = 3`` for order 2) is exercised by
-every hidden case.
+``n >= 7`` is stated in the prompt *and* enforced in the draws. It does two
+jobs. It disposes of the edge the brief names -- "the first 1 term" of a
+two-term recurrence would need a convention for what happens when ``n`` is
+smaller than the number of seeds, and no prompt here states one -- and it is
+also what makes the level ladder collapse-free; see below.
 
 ## The level ladder
 
@@ -87,11 +89,19 @@ Three properties made this the ladder:
    zero it records is a mathematical one. (Registering this module in
    ``generators.VARIANT_MODULES`` is what turns that on; until then the census
    below is the only evidence, and it was run for exactly that reason.)
-2. **It cannot be a no-op.** The difference sequence ``e = x_2 - x_1`` obeys the
-   same recurrence with ``e(1) = 0`` (and ``e(2) = 0`` at order 2) driven by
-   ``i``, so ``e`` is nonzero from the first driven index onward and the terms
-   and running totals differ at every index from there. Only the two scalar
-   modes can coincide, and only by cancellation; measured below.
+2. **It cannot be a no-op, and that is enumerated rather than sampled.** The
+   difference sequence ``e = x_2 - x_1`` obeys the same recurrence with zero
+   seeds, driven by ``i``. Linearity makes ``e`` independent of ``a``, ``b`` and
+   ``d`` -- it is a function of ``(p, n)`` alone at order 1 and ``(p, q, n)`` at
+   order 2 -- so the *entire* collapse question is 20 tuples at order 1 and 80
+   at order 2, and all 100 were checked directly. ``e`` is nonzero from the
+   first driven index onward, so ``terms`` and ``cumulative`` differ at every
+   index from there for every tuple; the two scalar modes can only coincide by
+   cancellation, and over ``n`` from 3 to 12 exactly two tuples cancel:
+   ``order1-total`` at ``p = -2, n = 5`` and ``order2-final`` at
+   ``p = -1, q = 1, n = 6``. Both are excluded by ``n >= 7``, which is the
+   second job that bound does, and **no tuple in the shipped draw space
+   collapses at all**.
 3. **It stays in integers**, which the tolerance argument above depends on.
 
 ### Rejected ladders
@@ -103,11 +113,12 @@ Three properties made this the ladder:
   harmless because nothing compares two variants.
 - **Level 2 batches the seeds**: ``a`` becomes a vector of starting values and
   the answer gains a row per seed. Non-degenerate by construction, and rejected
-  because the collapse is prevented by a *shape* change rather than by a
-  different computation -- a level-1 solution would fail on an error, so the
-  guard test would again record a zero of the uninteresting kind, and the
-  loop-free level-3 solution would need ``filter(..., [], 2)`` plus a ``repmat``,
-  which is a different subject (broadcasting) wearing this family's name.
+  because the collapse would be prevented by a *shape* change rather than by a
+  different computation -- a level-1 solution would fail on a nonconformant
+  assignment, so the guard test would again record a zero of the uninteresting
+  kind, and the loop-free level-3 solution would need ``filter(..., [], 2)``
+  plus a ``repmat``, which is a different subject (broadcasting) wearing this
+  family's name.
 - **Level 2 squares the terms.** Genuinely different for the vector modes and
   degenerate for ``final`` whenever ``x(n)`` is 0 or 1 -- an identity the draws
   cannot exclude without constraining the recurrence itself -- and it squares the
@@ -124,26 +135,27 @@ whose expected value equals the level-1 expected value for the same arguments:
     order1-terms          0/12000    worst task 0 of 6
     order1-cumulative     0/12000    worst task 0 of 6
     order1-final          0/12000    worst task 0 of 6
-    order1-total         42/12000    worst task 2 of 6
+    order1-total          0/12000    worst task 0 of 6
     order2-terms          0/12000    worst task 0 of 6
     order2-cumulative     0/12000    worst task 0 of 6
-    order2-final        119/12000    worst task 2 of 6
-    order2-total        124/12000    worst task 2 of 6
+    order2-final          0/12000    worst task 0 of 6
+    order2-total          0/12000    worst task 0 of 6
 
-The right-hand column is what decides shippability: a level-1 solution needs all
-six cases of a task to score full marks, and **no task of any variant gives it
-more than two**. The two scalar modes carry all of the residue, which is what
-property 2 above predicts -- a single number can coincide by cancellation, a
-sequence of five to nine of them does not. The same census run against the
-rejected "level 2 batches the seeds" ladder reports 0/12000 everywhere, which is
-what a structural (rather than mathematical) non-collapse looks like and is the
-reason it was not preferred.
+**The census sees the defect it is looking for, which is why those zeros mean
+something.** The first draw range here was ``n in 5..9``, and the same census on
+it reported ``order1-total`` at 566/12000 with a worst task of 3 of 6 and
+``order2-final`` at 160/12000 with a worst task of 2 of 6 -- the two cancelling
+tuples named above, each contributing every case that draws it, and neither
+visible to any validator in the repository. Raising the lower bound on ``n`` to
+7 removed both. The vector modes read 0/12000 before and after, as property 2
+predicts.
 
 This was also run through the interpreter rather than only through NumPy: each
 variant's level-1 ``natural`` solution, executed against its own level-2 and
 level-3 hidden cases on the pinned Octave 10.2.0, scored **0 of 288** cases
 (8 variants x 2 levels x 3 seeds x 6 cases), with all 288 running to completion
--- wrong answers, not errors.
+-- wrong answers, not errors, which is the outcome the guard test's measuring
+branch is written for.
 
 ## The 0.4.x method hint, dropped
 
@@ -159,8 +171,10 @@ level-2 prompt plus the loop clause, which is the invariant
 ``test_level_three_restates_its_own_task_for_every_problem`` checks and the
 reason `sequence_recurrence` is in that test's ``same_task_at_level_three`` set.
 
-The hint remains available where it belongs: the environment's guide/hint
-channel, which is scored separately.
+A method hint of that kind belongs to the retry guide -- the LLM the environment
+asks for one debugging hint when a candidate runs but is wrong -- whose value is
+measured separately as `guide_used`. Putting it in the prompt instead would fold
+that effect into the task and make the two indistinguishable.
 
 ## The reference and the naive solution
 
@@ -177,6 +191,32 @@ integer property this family's tolerance argument rests on). The level-3 check
 is therefore weaker than the level-1 and level-2 ones, where the loop
 transcription and the ``filter`` reference are independent implementations that
 agree on every hidden case.
+
+## What was actually run, on the pinned interpreter
+
+GNU Octave 10.2.0 from the pinned rootfs, network namespace obtained, through
+``executors.execute_candidate_locally`` -- the scoring path the taskset uses.
+8 variants x 3 levels x 5 seeds x 6 hidden cases = 720 cases per solution:
+
+- ``reference``: **720/720**, every (variant, level, seed) at fraction 1.0.
+- ``natural``:   **720/720**, same. No variant here needs a coercion, a
+  reshape or a transpose to pass, which is the condition for shipping it.
+
+Non-vacuity was established with two deliberately wrong solutions rather than
+one, and the second is why:
+
+- **wrong seed values** (order 2 drives ``filter`` with ``b`` instead of
+  ``b - p*a``; order 1 gets the sign of ``p`` in the transfer function wrong;
+  the loop forms get ``-p*x(i-1)``): fails everywhere -- worst score over 120
+  runs is 0.500 of a task's cases, full marks **0 of 120**.
+- **seed one index late** (a leading zero in the ``filter`` drive, or the loop
+  seeded at index 2): fails 22 of the 24 (variant, level) cells, and **scores
+  full marks on ``order2-final`` and ``order2-total`` at level 3**. That is not
+  a hole in the task: prepending a zero to the drive shifts the whole sequence
+  one place without changing any of its values, so ``x(end)`` and ``sum(x)`` are
+  genuinely unchanged and the mutant is a correct program for those two return
+  modes. It is recorded because a single-probe non-vacuity check would have read
+  as a failure of the task rather than of the probe.
 """
 
 from __future__ import annotations
@@ -244,8 +284,10 @@ _RETURNS = {
         "{X}",
     ),
     "cumulative": (
-        "Return the running totals of x, so that entry i of the result is "
-        "x(1) + x(2) + ... + x(i); the result has n entries.",
+        (
+            "Return the running totals of x, so that entry i of the result is "
+            "x(1) + x(2) + ... + x(i); the result has n entries."
+        ),
         lambda terms: list(accumulate(terms)),
         "cumsum({X})",
     ),
@@ -324,7 +366,7 @@ def _describe(key: str, level: int) -> str:
     parameters, seeds, step, first, _, _, _ = _ORDERS[order]
     named = ", ".join(parameters[:-1]) + f" and {parameters[-1]}"
 
-    # `n >= 5` is a promise the draws keep, not a rule the solver must apply. It
+    # `n >= 7` is a promise the draws keep, not a rule the solver must apply. It
     # is stated so that no reader has to decide what "the first 1 term" of a
     # two-term recurrence means -- the edge is excluded from the draws as well.
     lead = f"{named} are integer scalars, and n >= 7."
@@ -336,7 +378,7 @@ def _describe(key: str, level: int) -> str:
     if level > 1:
         # Spelled out because "+ i" inside a formula can be read as a typo for a
         # coefficient. It is the index of the term being computed.
-        definition += " Each step after the seed terms adds the index i itself."
+        definition += " The final term of each step is the index i itself."
 
     description = f"{lead} {definition} {_RETURNS[mode][0]}"
     if level == 3:
@@ -346,7 +388,7 @@ def _describe(key: str, level: int) -> str:
 
 def build(rng: np.random.Generator, level: int, key: str) -> Variant:
     order, mode = _parse(key)
-    parameters, _, _, _, denominator, preamble, body = _ORDERS[order]
+    parameters, _, _, first, denominator, preamble, body = _ORDERS[order]
     reduce_terms = _RETURNS[mode][1]
 
     cases: list[dict] = []
@@ -391,6 +433,10 @@ def build(rng: np.random.Generator, level: int, key: str) -> Variant:
     # of the drive, and the rest is the level's forcing term. For order 2,
     # `u(2) = b - p*a` is what makes `y(2) = u(2) + p*y(1)` come out as `b`.
     # Loop-free at every level, so it satisfies the level-3 constraint too.
+    #
+    # The spacing of the denominators in `_ORDERS` is load-bearing: inside
+    # brackets Octave reads `[1 -p]` as two elements and `[1 - p]` as the single
+    # element `1-p`. Do not "tidy" those strings.
     if order == "order1":
         rest = "d + (2:n)" if level > 1 else "repmat(d, 1, n-1)"
         drive = f"[a, {rest}]"
@@ -415,7 +461,7 @@ def build(rng: np.random.Generator, level: int, key: str) -> Variant:
         natural_body = (
             " x = zeros(1, n);\n"
             f"{preamble}\n"
-            f" for i = {_ORDERS[order][3]}:n\n"
+            f" for i = {first}:n\n"
             f"  {body.format(DRIVE=_drive(level))}\n"
             " endfor\n"
             f" out = {result.format(X='x')};"

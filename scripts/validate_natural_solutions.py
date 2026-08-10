@@ -106,7 +106,7 @@ LEGACY_VARIANT = "(legacy)"  # legacy path: one problem per level, by definition
 # It survives only because the conversion is staged across sessions and this
 # validator is the only check that has ever caught the undisclosed-convention
 # defect; dropping a family's coverage while it waits its turn would open exactly
-# the hole this file exists to close. Seven families are converted and their
+# the hole this file exists to close. Eight families are converted and their
 # entries are gone. Delete each family's entry in the same change that converts
 # it; the `stale_legacy_entries` line flags it if you forget. When the last one
 # goes, this table is empty, the `legacy` path is obviously dead, and both
@@ -122,11 +122,6 @@ LEGACY_NATURAL: dict[str, dict[int, str]] = {
         2: "out = zeros(1, n); out(1:2) = [a b];\n"
            " for i = 3:n; out(i) = p*out(i-1) + q*out(i-2); endfor",
         3: "out = filter(1, [1 -p -q], [a, b - p*a, zeros(1, max(n-2, 0))]);",
-    },
-    "signal_identity": {
-        1: "out = circshift(x, k);",
-        2: "out = real(ifft(abs(fft(x)) .^ 2));",
-        3: "out = real(ifft(abs(fft(x)) .^ 2));",
     },
 }
 

@@ -16,11 +16,12 @@ Every right-hand side here is serialised as a nested list, which is an ``mx1``
 **column**, so ``A \\ b`` is conformant exactly as written and no solution below
 -- reference or natural -- contains a ``(:)``, a ``reshape`` or a transpose.
 
-## The spec, and the three cells of it that cannot ship
+## The spec, and the cells of it that cannot ship
 
 ``PARAMETERIZATION_DESIGN.md`` proposes ``return in {x, [x; ||Ax-b||], ||Ax-b||
-alone, [x; rank]}`` crossed with ``system in {square, over-determined}``. Two of
-those four returns do not survive contact with the mathematics.
+alone, [x; rank]}`` crossed with ``system in {square, over-determined}``. One of
+those four returns cannot ship at all, and two more cannot ship in the square
+column.
 
 **Every residual cell of the square column is identically zero.** A square
 nonsingular system has an exact solution, so ``A*x - b`` is zero to rounding for
@@ -32,24 +33,31 @@ construction. That final entry was ~1e-15 on every hidden case at every level,
 graded against a tolerance of 1e-7. One sixth of the graded output of the
 family's hardest level was a constant.
 
-So the residual returns ship over-determined only, and with a right-hand side
-drawn **independently of** ``A`` rather than as ``A @ x0``, which is what makes
-``b`` fall outside the range of ``A`` and the residual a number worth computing
-(measured: ``norm(A*x-b)`` is 1.0 to 2.4 across the shipped cases, never near 0).
+Measured on the shipped draws: the residual norm of a square variant's solution
+is at most **1.6e-15** -- zero, as claimed -- while the over-determined variants'
+residual norms run **0.037 to 3.66**. So the residual returns ship
+over-determined only, and with a right-hand side drawn **independently of**
+``A`` rather than as ``A @ x0``, which is what puts ``b`` outside the range of
+``A`` and makes the residual a number worth computing.
 
 **``rank`` is dropped, and it is dropped twice over.** ``rank(A)`` is a
 tolerance convention rather than a computation -- Octave thresholds the singular
-values at ``max(size(A))*eps*norm(A)``, NumPy at ``max(size(A))*eps*smax`` --
-so the two agree only when the answer is unambiguous. Making it unambiguous
-means drawing a full-rank ``A``, and then the rank of every hidden case is
-``size(A, 2)``: a constant, readable off the input's shape without touching a
-single entry, exactly the defect ``struct_cell_wrangle`` had to rewrite its
-``count`` row to avoid. Confirmed rather than assumed: over the 480 matrices the
-shipped draws produce (8 keys x 3 levels x 6 cases x seeds), Octave's ``rank(A)``
-equals ``n`` on 480 of 480, with the smallest singular value never below 1.0 and
-the tolerance never above 8.9e-15 -- a margin of 14 orders of magnitude, and a
-row of the answer that no computation can get wrong. The alternative, drawing
-rank-deficient matrices, makes ``A\\b`` non-unique: Octave's QR with column
+values at ``max(size(A))*eps(max(s))``, NumPy at its own ``rcond`` -- so the two
+agree only when the answer is unambiguous. Making it unambiguous means drawing a
+full-rank ``A``, and then the rank of every hidden case is ``size(A, 2)``: a
+constant, readable off the input's shape without touching a single entry,
+exactly the defect ``struct_cell_wrangle`` had to rewrite its ``count`` row to
+avoid. Confirmed by execution rather than assumed -- over the 720 matrices five
+seeds of the shipped draws produce (5 seeds x 8 keys x 3 levels x 6 cases),
+Octave reports:
+
+    rank(A) < columns(A)          0 / 720
+    smallest singular value       1.0        (exactly, by construction)
+    largest default rank tol      8.0e-15
+
+a margin of fourteen orders of magnitude, and a row of the answer that no
+computation can get wrong. The alternative, drawing rank-deficient matrices,
+makes ``A\\b`` non-unique: Octave's QR with column
 pivoting returns a *basic* solution with at most ``rank(A)`` nonzeros and
 ``numpy.linalg.lstsq`` returns the *minimum-norm* one, and they are different
 vectors. A variant whose answer depends on which algorithm the grader ran is not
@@ -79,17 +87,26 @@ produced.
 
 Measured by execution on the pinned GNU Octave 10.2.0, comparing what Octave
 actually returns for every reference and natural solution against the NumPy
-expected values -- 8 keys x 3 levels x 12 seeds x 6 cases, 3,456 graded answers,
-17,000 individual numbers:
+expected values -- 8 keys x 3 levels x 18 seeds x 6 cases, 5,184 graded answers,
+25,530 individual numbers:
 
-    worst relative difference   4.0e-15      (tolerance 1e-7)
+    worst difference on the grader's own scale, |a-e| / max(1, |e|)   1.3e-15
+    worst elementwise true relative difference, |a-e| / |e|           1.4e-12
+    tolerance                                                         1e-7
 
-That is seven and a half orders of magnitude of headroom, and it is where the
-headroom is wanted: 1e-7 also forgives a solver that reaches the same answer by
-a different route -- ``pinv(A)*b``, or the normal equations ``(A'*A)\\(A'*b)``,
-which costs ``cond(A)^2 = 16`` times eps and so lands around 1e-15 too. The
-tolerance is not tightened to 1e-9 despite the measurement supporting it,
-because the margin it buys is over algorithms, not over noise.
+The first number is the one the grader computes, and it clears the tolerance by
+eight orders of magnitude. The second is reported beside it because it is the
+larger and the more honest: it is a single residual-vector entry of magnitude
+~8e-4 -- a near-cancellation, where a ~1e-15 absolute difference is a large
+*relative* one. The grader's ``max(1, |e|)`` floor is what makes that
+harmless, and every such entry is part of a vector whose norm is order 1.
+
+The headroom that remains is deliberate rather than slack: 1e-7 also forgives a
+solver that reaches the same answer by another route -- ``pinv(A)*b``, or the
+normal equations ``(A'*A)\\(A'*b)``, which costs ``cond(A)^2 = 16`` times eps and
+so also lands near 1e-15. The tolerance is *not* tightened to the 1e-9 default
+that the measurement would support, because the margin it buys is over
+algorithms, not over noise.
 
 ## The level ladder, and the honest word about level 3
 
@@ -98,11 +115,21 @@ and solves for that instead. It is a one-argument step, so this family's level 1
 and level 2 have the **same signature** and the repository's guard,
 ``test_no_variant_has_a_level_two_its_level_one_solution_already_solves``, is a
 real measurement here rather than the vacuous arity error it is for
-``struct_cell_wrangle`` and ``sliding_window``. Measured over 40 seeds per
-variant, 240 hidden cases each: the level-1 natural solution scores **0/240 on
-every one of the eight variants**, and the smallest relative gap between a
-level-2 answer and its level-1 counterpart anywhere in the census is 2.3e-2 --
-five orders of magnitude above the 1e-7 that would let one through.
+``struct_cell_wrangle`` and ``sliding_window``. Two measurements, because a
+guard that can run is still only a guard:
+
+- *The census.* For each variant, the level-2 answer against the level-1 answer
+  of the same inputs, on the grader's own comparison, 40 seeds x 6 cases:
+  **0 / 240 coincide, for every one of the eight variants**. The smallest gap
+  anywhere in the 1,920 cases is **3.9e-4**, which is 3,900 times the 1e-7 that
+  would let one through; per variant the smallest gaps are 3.9e-4
+  (``residualnorm``), 1.9e-3 (``residualvector``), 3.8e-3 (both
+  ``solution``/``solutionresidual`` over-determined), 3.9e-3 (``solution-square``),
+  4.0e-3 (``multirhsresidual``), 3.0e-2 and 3.6e-2 (the two ``multirhs``).
+- *The guard, actually run.* The level-1 **natural** solution executed on the
+  level-2 hidden cases in Octave, 5 seeds x 6 cases: **0/30 for every variant**,
+  with ``executed`` 30/30 throughout -- the zeros are wrong answers, not arity
+  errors, which is exactly what the four arity-changing families cannot show.
 
 **Three level-2 steps were rejected, each degenerate for a specific variant:**
 
@@ -134,6 +161,24 @@ sentence that costs nothing, and per-variant pass rates at level 3 should be
 read as a restatement of level 2 rather than as a harder rung. Making it a real
 level would mean banning the backslash operator, which grades Octave trivia
 instead of linear algebra, so the ladder is left short and labelled.
+
+## What was actually run
+
+On the pinned GNU Octave 10.2.0 through ``executors.execute_candidate_locally``,
+which is the same path the reward uses:
+
+- ``reference`` and ``natural``, all 8 keys x 3 levels x 18 seeds x 6 hidden
+  cases: **5,184 / 5,184 hidden cases passed**, no cell below 1.0. Plus 324/324
+  through ``build_tasks`` itself on a nineteenth seed, which is the path that
+  assembles the prompt and threads ``natural`` to the validator.
+- Non-vacuity, because a grader that accepts everything also accepts a correct
+  answer. One deliberately wrong solution per return kind, 3 seeds x 3 levels:
+  **0 / 18 for every one of the 24 (key, level) cells**. The wrong answers are
+  the ones a competent reader actually produces -- a transposed solution, a
+  residual computed before solving (``norm(b)``, i.e. the residual at ``x = 0``),
+  the residual with its sign flipped to ``b - A*x``, and a column of per-column
+  norms where a row is graded.
+- The degeneracy probe and the rank probe recorded above.
 """
 
 from __future__ import annotations
@@ -252,29 +297,19 @@ def _describe(key: str, level: int) -> str:
     kind, system = _parse(key)
     multi = kind.startswith("multirhs")
     given = "B" if multi else "b"
+    # The right-hand side the task is actually about: the given one at level 1,
+    # the centred one at levels 2 and 3.
     rhs = given if level == 1 else ("C" if multi else "c")
 
+    # Sentence 1: what the inputs are. Stated at every level, because the family
+    # name says nothing true about them.
     if system == "square":
-        setup = (
-            "A is a square nonsingular matrix of real numbers, with n rows and "
-            "n columns."
-        )
-        solution = f"the solution x of A*x = {rhs}"
-        column_solution = f"A*X(:,j) = {rhs}(:,j)"
+        setup = "A is a square nonsingular matrix of real numbers."
     else:
         setup = (
-            "A is a matrix of real numbers with more rows than columns and full "
-            "column rank, so A*x = b has no exact solution in general."
+            "A is a matrix of real numbers with more rows than columns, and it "
+            "has full column rank."
         )
-        solution = (
-            f"the least-squares solution x of A*x = {rhs}, that is the vector x "
-            f"minimising norm(A*x - {rhs}), which is unique because A has full "
-            "column rank"
-        )
-        column_solution = (
-            f"minimises norm(A*X(:,j) - {rhs}(:,j)) over all X(:,j)"
-        )
-
     if multi:
         setup += (
             " B is a matrix of real numbers with one row per row of A and two "
@@ -283,6 +318,7 @@ def _describe(key: str, level: int) -> str:
     else:
         setup += " b is a column vector with one entry per row of A."
 
+    # Sentence 2, levels 2 and 3 only: the step that makes this a new problem.
     if level == 1:
         transform = ""
     elif multi:
@@ -297,38 +333,60 @@ def _describe(key: str, level: int) -> str:
             "of its entries, so that c = b - mean(b)."
         )
 
+    # Sentence 3: which vector the answer is built from. The solution concept is
+    # pinned here rather than left to whichever one the reader's solver picks.
+    if system == "square" and not multi:
+        define = f" Let x be the solution of A*x = {rhs}."
+    elif system == "square":
+        define = (
+            f" Let X be the matrix whose column j solves A*X(:,j) = {rhs}(:,j)."
+        )
+    elif not multi:
+        define = (
+            f" The system A*x = {rhs} generally has no exact solution; let x be "
+            f"its least-squares solution, the vector minimising "
+            f"norm(A*x - {rhs}), which is unique because A has full column rank."
+        )
+    else:
+        define = (
+            f" In general no column of {rhs} lies in the range of A; let X be "
+            f"the matrix whose column j is the least-squares solution for that "
+            f"column, the vector minimising norm(A*X(:,j) - {rhs}(:,j)), which "
+            "is unique because A has full column rank."
+        )
+
+    # Sentence 4: what to return, in terms of x or X. The output *shape* is
+    # appended by the prompt builder; the output *layout* is named here.
     if kind == "solution":
-        task = f"Return {solution}."
+        task = "Return x."
+    elif kind == "multirhs":
+        task = (
+            "Return X, which has one row per column of A and one column per "
+            f"column of {rhs}."
+        )
     elif kind == "residualnorm":
         task = (
-            f"Let x be {solution}. Return the Euclidean norm of its residual, "
-            f"norm(A*x - {rhs}), as a single number."
+            f"Return the Euclidean norm of the residual, norm(A*x - {rhs}), as "
+            "a single number."
         )
     elif kind == "solutionresidual":
         task = (
-            f"Let x be {solution}. Return the entries of x followed by one final "
-            f"entry holding the Euclidean norm of the residual, that is the "
-            f"column vector [x; norm(A*x - {rhs})]."
+            f"Return the column vector [x; norm(A*x - {rhs})]: the entries of x "
+            "followed by one final entry holding the Euclidean norm of the "
+            "residual."
         )
     elif kind == "residualvector":
         task = (
-            f"Let x be {solution}. Return its residual vector A*x - {rhs} -- in "
-            f"that order, not {rhs} - A*x -- which has one entry per row of A."
-        )
-    elif kind == "multirhs":
-        task = (
-            f"Return the matrix X with one row per column of A and one column "
-            f"per column of {rhs}, whose column j {column_solution}."
+            f"Return the residual vector A*x - {rhs} -- in that order, not "
+            f"{rhs} - A*x -- which has one entry per row of A."
         )
     else:  # multirhsresidual
         task = (
-            f"For each column j of {rhs}, let X(:,j) be the column that "
-            f"{column_solution}. Return one entry per column of {rhs}: entry j "
-            f"is the Euclidean norm of that column's residual, "
-            f"norm(A*X(:,j) - {rhs}(:,j))."
+            f"Return one entry per column of {rhs}: entry j is the Euclidean "
+            f"norm of that column's residual, norm(A*X(:,j) - {rhs}(:,j))."
         )
 
-    described = f"{setup}{transform} {task}"
+    described = f"{setup}{transform}{define} {task}"
     if level == 3:
         return described + " Do not use for/while loops."
     return described
