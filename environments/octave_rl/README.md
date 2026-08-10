@@ -9,7 +9,7 @@ candidate process never receives, so printing cannot raise a score.
 
 The task pool is generated rather than scraped, so it cannot leak from a public
 benchmark and its hidden test cases are unbounded. It is **not** an unbounded
-supply of distinct problems — see "500 tasks, 30 distinct questions" below
+supply of distinct problems — see "500 tasks: Questions vs Prompts" below
 before reporting a number.
 
 ## Contents
@@ -18,16 +18,16 @@ before reporting a number.
 |---|---|
 | [Model naming conventions](#model-naming-conventions) | The full slugs behind "Nemotron" and "Qwen XB" referenced throughout. |
 | [Quickstart](#quickstart) | Install, and the two lines that load the environment. |
-| [Where candidate code runs](#where-candidate-code-runs) | Prime Sandbox against a local subprocess, how to pin the interpreter, and which to use for numbers you report. |
-| &nbsp;&nbsp;&rarr; [What the candidate interpreter can and cannot see](#what-the-candidate-interpreter-can-and-cannot-see) | Hidden values, pass counters and the network all sit outside the candidate process. |
-| [This tests language fluency more than reasoning](#this-tests-language-fluency-more-than-reasoning) | A failure taxonomy over 222 baseline rollouts, ranked by how often each competency is the one that fails. |
+| [Choosing a runtime](#choosing-a-runtime) | Where candidate code executes — Prime Sandbox, local subprocess, or a pinned rootfs — and when to use each. |
+| &nbsp;&nbsp;&rarr; [Scoring boundary](#scoring-boundary) | What the interpreter running candidate code can and cannot see. |
+| [What this actually tests](#what-this-actually-tests) | A failure taxonomy: this is a language-fluency benchmark far more than a reasoning one. |
 | [Families, levels, and difficulty](#families-levels-and-difficulty) | The ten task families, what each one exercises, and measured per-family pass rates. |
-| [500 tasks, 30 distinct questions](#500-tasks-30-distinct-questions) | Why a seed-disjoint pool holds out test inputs but not questions, and what that costs a reported score. |
+| [500 tasks: Questions vs Prompts](#500-tasks-questions-vs-prompts) | The pool carries 30 distinct prompts; a held-out seed holds out inputs, not questions. |
 | &nbsp;&nbsp;&rarr; [Train/Val/Test](#trainvaltest) | How to configure splits with the `families` field. |
 | [Reward](#reward) | Fraction of hidden cases passed, the attempt discount, and the diagnostic metrics reported alongside. |
 | [Output shape is graded](#output-shape-is-graded) | Orientation counts, every prompt states the shape it will be compared against, and why. |
 | [Multi-turn and the optional guide](#multi-turn-and-the-optional-guide) | The retry loop, the LLM guide, the discount table, and the credential the guide needs on disk. |
-| [A multi-turn score is mostly resampling](#a-multi-turn-score-is-mostly-resampling) | The measured split between the extra attempt, the feedback text, and the guide. |
+| [Multi-turn scoring](#multi-turn-scoring) | Most of the gap between a 1-turn and a 3-turn number is resampling, not capability. |
 | [Configuration](#configuration) | Every taskset and user field, with defaults. |
 | [Reproducibility](#reproducibility) | The pinned interpreter, seeds, and what makes two runs comparable. |
 | [Changes in 0.4.0 …](#changes-in-040) | Version history, newest first. |
@@ -65,7 +65,7 @@ env = vf.load_environment("octave-rl", level=1, num_tasks=200, seed=0)
 Candidate code has to run somewhere. Pick a runtime before you evaluate — see
 below; the default reaches for Prime Sandboxes.
 
-## Where candidate code runs
+## Choosing a runtime
 
 | `octave_runtime` | Where candidate code runs | Use for |
 | --- | --- | --- |
@@ -100,7 +100,7 @@ docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w \
   gnuoctave/octave:10.2.0 <your command>
 ```
 
-### What the candidate interpreter can and cannot see
+### Scoring boundary
 
 The candidate sandbox receives only the candidate function, a generated
 input-only runner, and the hidden *inputs*. It serialises each result's shape
@@ -120,7 +120,7 @@ outer harness and user simulator run in their worker subprocesses, and only
 candidate execution creates the pinned Octave Sandbox. This avoids a duplicate
 container without weakening the boundary.
 
-## This tests language fluency more than reasoning
+## What this actually tests
 
 Worth knowing before you train on it. A failure taxonomy over 222 baseline
 rollouts put the competencies in this order:
@@ -182,7 +182,7 @@ lowest pass rate is **0.213** (Nemotron) and **0.056** (Qwen 4B). At
 `group_size = 8`, unanimous — therefore gradient-free — groups run at **0.100**
 on Nemotron Level 2 and **0.143** on Qwen 4B Level 2.
 
-## 500 tasks, 30 distinct questions
+## 500 tasks: Questions vs Prompts
 
 Read this before reporting a number from this environment.
 
@@ -340,7 +340,7 @@ Credentials are never written into traces or package configuration. Set
 > rollouts — but it is still misconfigured, and the hints are what attempt 3 is
 > for.
 
-## A multi-turn score is mostly resampling
+## Multi-turn scoring
 
 Measured on 2026-08-09 and worth knowing before you report anything from a
 multi-turn configuration.
@@ -418,7 +418,7 @@ point. It is native `verifiers.v1` throughout and does not mix in the legacy v0
   with no execution error, where the hint is the only thing that can help.
 - The attempt discount follows the hint rather than the attempt number: a hinted
   solve is priced at `guided_attempt_multiplier` whenever the hint arrived.
-- No score change is expected from any of this; see "A multi-turn score is mostly resampling"
+- No score change is expected from any of this; see "Multi-turn scoring"
   means".
 
 ## Changes in 0.3.1
