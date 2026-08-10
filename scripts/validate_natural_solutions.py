@@ -106,17 +106,12 @@ LEGACY_VARIANT = "(legacy)"  # legacy path: one problem per level, by definition
 # It survives only because the conversion is staged across sessions and this
 # validator is the only check that has ever caught the undisclosed-convention
 # defect; dropping a family's coverage while it waits its turn would open exactly
-# the hole this file exists to close. Six families are converted and their
+# the hole this file exists to close. Seven families are converted and their
 # entries are gone. Delete each family's entry in the same change that converts
 # it; the `stale_legacy_entries` line flags it if you forget. When the last one
 # goes, this table is empty, the `legacy` path is obviously dead, and both
 # should be removed outright.
 LEGACY_NATURAL: dict[str, dict[int, str]] = {
-    "reshape_permute": {
-        1: "out = x(:);",
-        2: "y = permute(reshape(x, dims), [2 1 3]); out = y(:)';",
-        3: "y = permute(reshape(x, dims), [3 1 2]); out = y(:)';",
-    },
     "linsolve_tolerance": {
         1: "out = A \\ b;",
         2: "out = A \\ b;",

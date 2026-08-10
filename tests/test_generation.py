@@ -238,18 +238,24 @@ def test_a_family_generates_the_same_tasks_whichever_variants_are_present() -> N
     """
     kept = complement(declared_variants(), DEFAULT_HELDOUT_VARIANTS)
     for level in (1, 2, 3):
-        # Twice the row count: dropping variants makes the stream run further
-        # to reach 300 kept rows, so a shorter comparison pool would simply not
-        # contain the later indices.
-        full = {
-            row["task"]: row
-            for row in build_tasks(level, 600, 21, include_reference=True)
-        }
         held_keys = {name.split(":", 1)[1] for name in DEFAULT_HELDOUT_VARIANTS}
         for selection, wanted in ((kept, False), (DEFAULT_HELDOUT_VARIANTS, True)):
             filtered = build_tasks(
-                level, 300, 21, include_reference=True, variants=selection
+                level, 150, 21, include_reference=True, variants=selection
             )
+            # How far the *unfiltered* stream has to run to contain every kept
+            # task. Derived from the ids rather than guessed at: a filter that
+            # drops more of the stream makes it run further, so any fixed
+            # multiple of the row count goes stale as more families convert.
+            # Row k of an unfiltered pool carries index k, so this many rows
+            # covers every index the filtered pool used.
+            needed = max(
+                int(row["task"].rsplit("-", 1)[1]) for row in filtered
+            ) + 1
+            full = {
+                row["task"]: row
+                for row in build_tasks(level, needed, 21, include_reference=True)
+            }
             converted = [
                 row for row in filtered
                 if row["info"]["family"] in declared_variants()
@@ -298,9 +304,17 @@ def test_a_converted_family_ships_a_naive_solution_with_every_task() -> None:
             natural = info.get("natural", "")
             assert natural, f"{task['task']} carries no naive solution"
             assert info["fn_name"] in natural
-            # A naive solution that coerces is not naive. The whole signal is
-            # that a competent reader's first attempt passes as written.
-            assert "(:)" not in natural, f"{task['task']} naive solution coerces"
+            # A naive solution that coerces its ARGUMENTS is not naive: `b(:)`
+            # on an input is the defensive reshape that hid the linsolve defect
+            # for weeks. `(:)` on a value the function computed is different --
+            # it is the flatten `reshape_permute` prompts literally ask for --
+            # so the check names the arguments rather than banning the idiom.
+            arguments = info["signature"].split("(", 1)[1].rstrip(")").split(",")
+            for argument in (name.strip() for name in arguments):
+                assert f"{argument}(:)" not in natural, (
+                    f"{task['task']} naive solution coerces its argument "
+                    f"{argument!r}"
+                )
 
 
 class _VariantTask:

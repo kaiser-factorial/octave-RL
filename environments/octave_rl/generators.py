@@ -9,6 +9,7 @@ import numpy as np
 from families import broadcast_arith as _broadcast_arith_variants
 from families import logical_index as _logical_index_variants
 from families import reduce_along_dim as _reduce_along_dim_variants
+from families import reshape_permute as _reshape_permute_variants
 from families import sliding_window as _sliding_window_variants
 from families import string_parse as _string_parse_variants
 from families import struct_cell_wrangle as _struct_cell_wrangle_variants
@@ -32,6 +33,7 @@ VARIANT_MODULES: dict[str, Any] = {
     "logical_index": _logical_index_variants,
     "struct_cell_wrangle": _struct_cell_wrangle_variants,
     "string_parse": _string_parse_variants,
+    "reshape_permute": _reshape_permute_variants,
 }
 
 
