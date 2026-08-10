@@ -79,19 +79,61 @@
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "positive-extract": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "negative-extract": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "even-extract": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "magnitude-extract": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "magnitude-zero": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "even-nan": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "outside-nan": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "outside-clamp": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "reshape_permute": {
@@ -277,38 +319,122 @@
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "minmax-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "meanstd-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "minmedmax-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sumcount-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "minmax-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "meanstd-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "minmedmax-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sumcount-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "string_parse": {
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "comma-integers-row": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "comma-decimals-column": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "semicolon-integers-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "semicolon-decimals-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "space-integers-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "space-decimals-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "mixed-integers-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "mixed-decimals-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "signal_identity": {
@@ -334,19 +460,19 @@
       "unvalidated_families": [],
       "variant_families": [
         "broadcast_arith",
-        "reduce_along_dim",
-        "sliding_window"
-      ],
-      "legacy_families": [
-        "linsolve_tolerance",
         "logical_index",
-        "reshape_permute",
-        "sequence_recurrence",
-        "signal_identity",
+        "reduce_along_dim",
+        "sliding_window",
         "string_parse",
         "struct_cell_wrangle"
       ],
-      "legacy_tasks": 350,
+      "legacy_families": [
+        "linsolve_tolerance",
+        "reshape_permute",
+        "sequence_recurrence",
+        "signal_identity"
+      ],
+      "legacy_tasks": 200,
       "failures": [],
       "unvalidated": [],
       "ok": true
@@ -422,19 +548,61 @@
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "positive-extract": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "negative-extract": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "even-extract": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "magnitude-extract": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "magnitude-zero": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "even-nan": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "outside-nan": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "outside-clamp": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "reshape_permute": {
@@ -620,38 +788,122 @@
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "minmax-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "meanstd-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "minmedmax-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sumcount-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "minmax-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "meanstd-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "minmedmax-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sumcount-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "string_parse": {
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "comma-integers-row": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "comma-decimals-column": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "semicolon-integers-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "semicolon-decimals-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "space-integers-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "space-decimals-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "mixed-integers-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "mixed-decimals-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "signal_identity": {
@@ -677,19 +929,19 @@
       "unvalidated_families": [],
       "variant_families": [
         "broadcast_arith",
-        "reduce_along_dim",
-        "sliding_window"
-      ],
-      "legacy_families": [
-        "linsolve_tolerance",
         "logical_index",
-        "reshape_permute",
-        "sequence_recurrence",
-        "signal_identity",
+        "reduce_along_dim",
+        "sliding_window",
         "string_parse",
         "struct_cell_wrangle"
       ],
-      "legacy_tasks": 350,
+      "legacy_families": [
+        "linsolve_tolerance",
+        "reshape_permute",
+        "sequence_recurrence",
+        "signal_identity"
+      ],
+      "legacy_tasks": 200,
       "failures": [],
       "unvalidated": [],
       "ok": true
@@ -765,19 +1017,61 @@
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "positive-extract": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "negative-extract": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "even-extract": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "magnitude-extract": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "magnitude-zero": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "even-nan": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "outside-nan": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "outside-clamp": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "reshape_permute": {
@@ -963,38 +1257,122 @@
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "minmax-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "meanstd-columns": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "minmedmax-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sumcount-columns": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "minmax-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "meanstd-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "minmedmax-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "sumcount-rows": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "string_parse": {
           "passed": 300,
           "total": 300,
           "variants": {
-            "(legacy)": {
-              "passed": 300,
-              "total": 300,
-              "tasks": 50,
+            "comma-integers-row": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "comma-decimals-column": {
+              "passed": 42,
+              "total": 42,
+              "tasks": 7,
+              "failing_tasks": 0
+            },
+            "semicolon-integers-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "semicolon-decimals-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "space-integers-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "space-decimals-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "mixed-integers-column": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
+              "failing_tasks": 0
+            },
+            "mixed-decimals-row": {
+              "passed": 36,
+              "total": 36,
+              "tasks": 6,
               "failing_tasks": 0
             }
           },
           "tasks": 50,
           "validated_tasks": 50,
           "unvalidated_tasks": 0,
-          "path": "legacy",
+          "path": "variant",
           "paths": {
-            "legacy": 50
+            "variant": 50
           }
         },
         "signal_identity": {
@@ -1020,43 +1398,43 @@
       "unvalidated_families": [],
       "variant_families": [
         "broadcast_arith",
-        "reduce_along_dim",
-        "sliding_window"
-      ],
-      "legacy_families": [
-        "linsolve_tolerance",
         "logical_index",
-        "reshape_permute",
-        "sequence_recurrence",
-        "signal_identity",
+        "reduce_along_dim",
+        "sliding_window",
         "string_parse",
         "struct_cell_wrangle"
       ],
-      "legacy_tasks": 350,
+      "legacy_families": [
+        "linsolve_tolerance",
+        "reshape_permute",
+        "sequence_recurrence",
+        "signal_identity"
+      ],
+      "legacy_tasks": 200,
       "failures": [],
       "unvalidated": [],
       "ok": true
     }
   ],
-  "elapsed_seconds": 199.9,
+  "elapsed_seconds": 164.2,
   "unvalidated_families": [],
   "unvalidated_tasks": 0,
   "failed_variants": [],
   "variant_families": [
     "broadcast_arith",
-    "reduce_along_dim",
-    "sliding_window"
-  ],
-  "legacy_families": [
-    "linsolve_tolerance",
     "logical_index",
-    "reshape_permute",
-    "sequence_recurrence",
-    "signal_identity",
+    "reduce_along_dim",
+    "sliding_window",
     "string_parse",
     "struct_cell_wrangle"
   ],
-  "legacy_tasks": 1050,
+  "legacy_families": [
+    "linsolve_tolerance",
+    "reshape_permute",
+    "sequence_recurrence",
+    "signal_identity"
+  ],
+  "legacy_tasks": 600,
   "stale_legacy_entries": [],
   "ok": true
 }

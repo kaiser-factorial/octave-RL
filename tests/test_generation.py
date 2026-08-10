@@ -345,7 +345,23 @@ def test_no_variant_has_a_level_two_its_level_one_solution_already_solves() -> N
     So the check has to be this one: run each variant's *level-1* naive solution
     against its *level-2* hidden cases. Full marks there means level 2 asked for
     nothing new.
+
+    **What this test cannot measure, stated because an earlier version hid it.**
+    When level 2 takes different arguments from level 1 -- a new parameter, a
+    second matrix, a different input type -- the level-1 solution dies on an
+    arity error before computing anything, and `fraction` is 0.0 for a reason
+    that has nothing to do with the mathematics. The assertion passes, and it
+    passes vacuously. That was true of four of the six converted families and
+    was caught by two family authors independently, not by this test.
+
+    So the arity case is asserted rather than assumed: signatures that differ
+    are a structural difference between the two problems, and the test confirms
+    the level-1 solution genuinely could not run, rather than accepting a zero
+    of unknown provenance. It does NOT confirm those families' level 2 is a new
+    problem -- only their own per-variant census can, and each family's module
+    docstring records one. Do not read a green run here as covering them.
     """
+    measured = 0
     for family, module in VARIANT_MODULES.items():
         for key in module.VARIANT_KEYS:
             level_one = module.build(np.random.default_rng(4242), 1, key)
@@ -353,10 +369,25 @@ def test_no_variant_has_a_level_two_its_level_one_solution_already_solves() -> N
             record = asyncio.run(
                 execute_candidate_locally(_VariantTask(level_two), level_one.natural)
             )
-            assert record["fraction"] < 1.0, (
-                f"{family}:{key} level 2 is fully solved by its own level-1 "
-                f"solution -- a distinct prompt that is not a distinct problem"
+            if level_one.signature == level_two.signature:
+                # The probe ran on level 2's inputs, so this is a measurement.
+                assert record["fraction"] < 1.0, (
+                    f"{family}:{key} level 2 is fully solved by its own level-1 "
+                    f"solution -- a distinct prompt that is not a distinct problem"
+                )
+                measured += 1
+                continue
+            # Different signature: level 2 asks for different arguments, which
+            # is itself a difference between the problems. Confirm the zero came
+            # from that and not from something this test would otherwise miss.
+            assert record["executed"] == 0, (
+                f"{family}:{key} has different level-1 and level-2 signatures, "
+                f"yet its level-1 solution ran on level-2 inputs -- this test's "
+                f"vacuity assumption is wrong for it, so it needs a real probe"
             )
+    # Guard the guard: if every family moved to a differing signature this test
+    # would assert nothing about degeneracy at all, and would still be green.
+    assert measured >= 8, f"only {measured} variants actually measured"
 
 
 def test_unknown_variant_names_are_rejected() -> None:

@@ -106,16 +106,12 @@ LEGACY_VARIANT = "(legacy)"  # legacy path: one problem per level, by definition
 # It survives only because the conversion is staged across sessions and this
 # validator is the only check that has ever caught the undisclosed-convention
 # defect; dropping a family's coverage while it waits its turn would open exactly
-# the hole this file exists to close. `reduce_along_dim`, `broadcast_arith` and
-# `sliding_window` are converted and their entries are gone. Delete each family's entry in the
-# same change that converts it. When the last one goes, this table is empty, the
-# `legacy` path is obviously dead, and both should be removed outright.
+# the hole this file exists to close. Six families are converted and their
+# entries are gone. Delete each family's entry in the same change that converts
+# it; the `stale_legacy_entries` line flags it if you forget. When the last one
+# goes, this table is empty, the `legacy` path is obviously dead, and both
+# should be removed outright.
 LEGACY_NATURAL: dict[str, dict[int, str]] = {
-    "logical_index": {
-        1: "out = x(x > 0);",
-        2: "out = x; out(x < lo | x > hi) = NaN;",
-        3: "out = x; out(x < lo | x > hi) = NaN;",
-    },
     "reshape_permute": {
         1: "out = x(:);",
         2: "y = permute(reshape(x, dims), [2 1 3]); out = y(:)';",
@@ -131,16 +127,6 @@ LEGACY_NATURAL: dict[str, dict[int, str]] = {
         2: "out = zeros(1, n); out(1:2) = [a b];\n"
            " for i = 3:n; out(i) = p*out(i-1) + q*out(i-2); endfor",
         3: "out = filter(1, [1 -p -q], [a, b - p*a, zeros(1, max(n-2, 0))]);",
-    },
-    "struct_cell_wrangle": {
-        1: "out = a + b;",
-        2: "out = [min(A); max(A)];",
-        3: "out = [min(A); max(A)];",
-    },
-    "string_parse": {
-        1: "out = sscanf(strrep(s, ',', ' '), '%f')';",
-        2: "out = sscanf(strrep(s, ',', ' '), '%f')';",
-        3: "out = sscanf(strrep(s, ',', ' '), '%f')';",
     },
     "signal_identity": {
         1: "out = circshift(x, k);",
