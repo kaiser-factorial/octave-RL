@@ -71,7 +71,6 @@ empty or single-window edge that the prompt does not describe.
 from __future__ import annotations
 
 import numpy as np
-
 from specs import Variant
 
 # (statistic, stride form). Order is the round-robin order and is part of the
