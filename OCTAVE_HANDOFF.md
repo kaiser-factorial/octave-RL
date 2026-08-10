@@ -20,7 +20,30 @@ is the right entry point for "what does this mean for Nemotron".
 
 ## Start here: what changed on 2026-08-10
 
-### The solved-only reward ablation is built, tested, and not launched
+### Parameterisation is under way: three of ten families, 94 prompts
+
+`PARAMETERIZATION_DESIGN.md` has the decisions and the corrected measurement
+plan. In short: eight variants per family, the level ladder stays, and **both**
+a family holdout and a new variant holdout ship as config fields.
+
+- **94 distinct prompts, up from 30.** `reduce_along_dim`, `broadcast_arith` and
+  `sliding_window` are on the variant form; the other seven are on a clearly
+  marked transitional path in the validator and still covered.
+- **Both gates green on the pinned Octave 10.2.0, locally.** The naive-solution
+  validator reports **9,000/9,000 hidden cases** at 500 tasks per level. The
+  rootfs now fetches from GHCR when Docker Hub rate-limits, so this runs without
+  a pod.
+- **A seed split still cannot hold out a question, and no variant count fixes
+  that** — 93 of 94 prompts are shared between seeds. Quote generalization from
+  the *variant* holdout, whose default selection is a positional placeholder
+  until per-variant pass rates exist.
+- **Three ladder designs were rejected as degenerate, and one had shipped.** A
+  level-2 step that collapses onto level 1 is invisible to every validator here,
+  because reference and naive solution both pass it. There is now a test.
+- Not done: seven families, and the per-variant pass-rate sweep. No model has
+  seen any of these prompts, so nothing is known about their difficulty.
+
+### The solved-only reward ablation is built, tested, and ON HOLD
 
 `reward_mode = "solved_only"` makes a fully correct answer worth 1.0 and
 everything else worth 0.0, still discounted 0.85 / 0.60 by attempt. Default
@@ -52,8 +75,12 @@ is a result rather than a nuisance.
   LoRA on an MoE). It needs a three-step smoke and its own control arm.
 - Read outcomes from the new `solved` metric and `raw_case_fraction`. The two
   arms define reward differently, so their reward columns are **not comparable**.
-- Not launched: the session that prepared this had no GPU, no `prime` CLI and no
-  Prime credential.
+- Not launched, and now deliberately deferred: parameterisation is a breaking
+  change to task semantics, so shipping 0.5.0 invalidates every 0.4.x control
+  including this arm's. Settle the pool first. The session that prepared it also
+  had no GPU, no `prime` CLI and no Prime credential.
+- The Nemotron arm is dropped: training comparisons are Qwen-only. The 0.8B arm
+  moved to batch 64.
 
 ## Start here: what changed on 2026-08-09
 

@@ -1,8 +1,9 @@
 # Design: parameterised task descriptions
 
-**Status: in progress since 2026-08-10. Two of ten families converted
-(`reduce_along_dim`, `broadcast_arith`), the validator parameterised, the
-holdout built.** Read `OCTAVE_HANDOFF.md` first, then this.
+**Status: in progress since 2026-08-10. Three of ten families converted
+(`reduce_along_dim`, `broadcast_arith`, `sliding_window` -- the three the plan
+below scopes as the starting set), the validator parameterised, the holdout
+built, both gates green.** Read `OCTAVE_HANDOFF.md` first, then this.
 
 ## Decisions taken on 2026-08-10
 
@@ -13,8 +14,10 @@ holdout built.** Read `OCTAVE_HANDOFF.md` first, then this.
 | family or variant holdout | **both**, as config fields; the variant holdout is new |
 | how the variant is chosen | round-robin on the task's position in its family's stream, never an rng draw |
 
-Measured after two families: **72 distinct prompts, up from 30.** On the same
-trajectory all ten reach 240, above the ≥200 target.
+Measured after the three starter families: **94 distinct prompts, up from 30**,
+and `validate_natural_solutions.py --num-tasks 500` reports **9,000/9,000 hidden
+cases** on the pinned Octave 10.2.0. On the same trajectory all ten families
+reach roughly 240, above the ≥200 target.
 
 ### Correction to the measurement plan below: seed overlap cannot fall
 
@@ -32,8 +35,10 @@ collect. Round-robin gives exact counts and is strictly better.
 
 **What follows: a seed split still holds out inputs, not questions.** Parameter-
 isation raises the number of problems; it does not turn a seed into a problem
-split. **The variant holdout is the mechanism that produces a held-out
-problem**, and it is the one to quote a generalization number from. That is a
+split. Measured at three families: 93 of 94 prompts shared between seeds, and
+the single exception is a shape sentence that varies with the draw, not a
+different question. **The variant holdout is the mechanism that produces a
+held-out problem**, and it is the one to quote a generalization number from. That is a
 narrower claim than this document originally made for the change, and it is the
 honest one.
 
@@ -211,10 +216,17 @@ set.** Both converted families needed a rejected first attempt.
   exactly on the separable operations, so every row comes out identical and code
   that ignores `a` scores 6/6. Fixed by a column-wise running total.
 
-Both are the same failure — **a distinct prompt that is not a distinct
-problem** — and neither is visible to any validator, because the reference and
-the naive solution both pass. Only reading the level-2 semantics against every
-variant catches it. Expect one per family and budget for it.
+`sliding_window` rejected the trim ladder for a third instance of the same
+thing: a symmetric trim leaves a window's median unchanged too. That rejection
+is what exposed the *shipped* version of the bug in `reduce_along_dim`, where
+both median variants had a level-2 answer identical to their level 1 on 240 of
+240 cases. See `PIPELINE_LOG.md`.
+
+All of these are the same failure — **a distinct prompt that is not a distinct
+problem** — and none is visible to any validator, because the reference and the
+naive solution both pass. There is now a test for it (run the level-1 naive
+solution against the level-2 cases), but expect one rejected ladder per family
+and budget for it.
 
 One variant was rejected outright rather than shipped: a quotient in
 `broadcast_arith`, where a zero in `b` returns `Inf` and fails however the model
