@@ -112,12 +112,6 @@ LEGACY_VARIANT = "(legacy)"  # legacy path: one problem per level, by definition
 # goes, this table is empty, the `legacy` path is obviously dead, and both
 # should be removed outright.
 LEGACY_NATURAL: dict[str, dict[int, str]] = {
-    "sequence_recurrence": {
-        1: "out = a + d * (0:n-1);",
-        2: "out = zeros(1, n); out(1:2) = [a b];\n"
-           " for i = 3:n; out(i) = p*out(i-1) + q*out(i-2); endfor",
-        3: "out = filter(1, [1 -p -q], [a, b - p*a, zeros(1, max(n-2, 0))]);",
-    },
 }
 
 # Why a task could not be checked. Recorded verbatim in the JSON report so a

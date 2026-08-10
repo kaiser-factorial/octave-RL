@@ -11,6 +11,7 @@ from families import linsolve_tolerance as _linsolve_tolerance_variants
 from families import logical_index as _logical_index_variants
 from families import reduce_along_dim as _reduce_along_dim_variants
 from families import reshape_permute as _reshape_permute_variants
+from families import sequence_recurrence as _sequence_recurrence_variants
 from families import signal_identity as _signal_identity_variants
 from families import sliding_window as _sliding_window_variants
 from families import string_parse as _string_parse_variants
@@ -38,6 +39,7 @@ VARIANT_MODULES: dict[str, Any] = {
     "reshape_permute": _reshape_permute_variants,
     "signal_identity": _signal_identity_variants,
     "linsolve_tolerance": _linsolve_tolerance_variants,
+    "sequence_recurrence": _sequence_recurrence_variants,
 }
 
 
