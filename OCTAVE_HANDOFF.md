@@ -41,8 +41,11 @@ nobody fully solved the task, which means **more empty batches**, and that count
 is a result rather than a nuisance.
 
 - Configs: `configs/prime-rl/octave-{qwen-08b,qwen-4b,nemotron}-20step-solved-only.toml`.
-  The two Qwen ones are byte-identical to already-run controls except for
-  `output_dir` and the flag, so both are paired comparisons.
+  The two Qwen ones are byte-identical to their control configs except for
+  `output_dir` and the flag, so both are paired comparisons *if the control runs
+  can be produced*. The 0.8B batch-16 control is written up here; **the 4B rung
+  has no committed artifact and no per-step table anywhere in this repository**,
+  so confirm its logs exist or budget a control arm for it.
 - **Nemotron has never been trained here** — only evaluated through hosted
   Prime Inference. Its config is a best guess, is marked UNVALIDATED in its own
   header, and carries three hazards (renderer/thinking, 80 GB-class topology,

@@ -1,8 +1,15 @@
 # ABLATION 2026-08-10 -- solved_only reward. Qwen3.5-4B, Level 1, batch 16 / group 8.
 #
-# Paired with `octave-qwen-4b-20step-batch16.toml`, the 4B rung of the ladder,
-# which has already run. The ONLY difference is `reward_mode = "solved_only"` in
-# the taskset's `task` table.
+# Paired with `octave-qwen-4b-20step-batch16.toml`, the 4B rung of the ladder.
+# The ONLY difference is `reward_mode = "solved_only"` in the taskset's `task`
+# table.
+#
+# CONFIRM THE CONTROL EXISTS BEFORE TREATING THIS AS PAIRED. No 20-step artifact
+# for the 4B rung is committed under `artifacts/training/`, and no entry in
+# OCTAVE_HANDOFF.md or PIPELINE_LOG.md reports its per-step table -- only the
+# 0.8B batch-16 / batch-64 pair is written up. If the 4B rung's logs cannot be
+# produced, this arm needs its own control run at the same settings, which
+# doubles its cost.
 #
 # What the flag changes: a fully correct answer is worth 1.0 and everything else
 # is worth 0.0, still discounted 0.85 / 0.60 by attempt. Per-case partial credit
