@@ -48,6 +48,19 @@ not the level-1 answer for any operation. It is also exact in integers, and it
 is orientation-sensitive in a family whose orientation is graded -- accumulating
 along the wrong dimension gives a same-sized, wrong-valued answer.
 
+Measured over 2,000 tasks per variant: no task has a level-2 answer equal to
+its level-1 answer on more than 2 of its 6 cases, so a level-1 solution never
+scores full marks at level 2 for any of the eight. The residual coincidences are
+draws where the grid is all zeros (``b`` all zeros makes every running total
+zero too), which is an ordinary draw rather than an undescribed edge -- correct
+code passes it either way.
+
+The same census flags one honest weakness: for ``max`` and ``min``, 12% of cases
+draw an ``a`` and a ``b`` that do not interleave, and on those the answer does
+not depend on the dominated vector's individual values. Worst observed is 4 of 6
+such cases in a task, so no task is decided by it, and it is inherent to the two
+operations rather than to how they are drawn.
+
 Hidden cases always draw at least two elements for each of ``a`` and ``b``, so
 the graded result is genuinely 2-D (which is where column-major flattening
 bites, see PIPELINE_LOG 2026-08-08) and the bare ``cumsum(M)`` a competent
@@ -74,7 +87,6 @@ Both are recorded in ``PIPELINE_LOG.md`` and both are constraints on this file.
 from __future__ import annotations
 
 import numpy as np
-
 from specs import Variant
 
 # The binary operation applied to every (a(i), b(j)) pair. Order is the

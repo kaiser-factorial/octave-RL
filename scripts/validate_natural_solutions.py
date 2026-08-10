@@ -23,20 +23,41 @@ level, and a table keyed by ``(family, level)`` would silently score one of them
 and report PASS for the other seven -- the same silence this validator exists to
 break.
 
-So the naive solution now comes from the task itself: ``specs.Variant`` carries
-``description``, ``reference`` and ``natural`` written together from one
-definition, and the generator threads ``natural`` through ``info``. Prompt,
-reference and naive solution cannot drift apart, because there is only one
-place they are written.
+So for a converted family the naive solution now comes from the task itself:
+``specs.Variant`` carries ``description``, ``reference`` and ``natural`` written
+together from one definition, and the generator threads ``natural`` through
+``info``. Prompt, reference and naive solution cannot drift apart, because there
+is only one place they are written.
+
+## The three paths a task can take here
+
+The conversion is staged across more than one session, and this validator is the
+only check that has ever caught the undisclosed-convention defect, so dropping
+coverage of the not-yet-converted families for the duration is not acceptable.
+Each task therefore resolves to exactly one of:
+
+- ``variant`` -- ``info["natural"]`` came with the task. The real check.
+- ``legacy``  -- the family is not in ``generators.VARIANT_MODULES`` and
+  ``LEGACY_NATURAL`` still has an entry for it. Scored and counted, but marked
+  ``LEGACY`` everywhere, because it is the weaker pre-0.5.0 check: one naive
+  solution for the whole family at that level.
+- ``unvalidated`` -- neither. Never a pass, always fails the run.
+
+A converted family is **never** allowed to fall back to ``LEGACY_NATURAL``. If
+it is in ``VARIANT_MODULES`` and a task arrives without ``natural``, that is a
+threading bug in the generator, and scoring it against the one-size table would
+report PASS for seven variants it never ran -- the exact defect this change
+exists to remove. That case is UNVALIDATED and red.
 
 ## What this validator refuses to do
 
-It refuses to report a pass for a task it could not check. A family that has not
-been converted to the variant form carries no ``natural``, and is reported as
-UNVALIDATED -- named in the console output, listed in the JSON report, and
-counted as a failure of the run. Every previous instance of the undisclosed
-convention defect survived because a check was quietly absent rather than
-loudly red.
+It refuses to report a pass for a task it could not check, and it refuses to let
+a weaker check pass for a stronger one. UNVALIDATED tasks are named in the
+console output, listed in the JSON report, and fail the run. Legacy-path
+families pass, but the run says how many of them there are every time, because
+"PASS with nine families on the legacy path" is a much smaller claim than
+"PASS". Every previous instance of the undisclosed convention defect survived
+because a check was quietly absent, or quietly weaker than it looked.
 
 Usage:
     uv run python scripts/validate_natural_solutions.py
@@ -56,7 +77,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parents[1] / "environments" / "octave_rl"))
 
 from executors import execute_candidate_locally, runtime_description
-from generators import build_tasks
+from generators import VARIANT_MODULES, build_tasks
 
 # The task ``info`` keys this validator reads beyond the ones the executor needs.
 # ``natural`` is the full function source from ``specs.Variant.natural``;
@@ -64,25 +85,90 @@ from generators import build_tasks
 NATURAL_KEY = "natural"
 VARIANT_KEY = "variant"
 
-# IN-FLIGHT CONTRACT NOTE (0.5.0 conversion)
-# -----------------------------------------
-# ``build_tasks`` does not yet thread ``variant``/``natural`` into ``info`` for
-# every family: the conversion to the variant form lands family by family. This
-# validator is written against the contract, not against the current state of
-# ``generators.py``:
-#   * ``info["natural"]``  absent -> the task is UNVALIDATED, never a pass;
-#   * ``info["variant"]``  absent while ``natural`` is present -> the task is
-#     still scored, and tallied under the placeholder variant below.
-# Neither case is inferred, guessed, or filled in from a lookup table. When the
-# last family is converted, ``UNVALIDATED`` and ``UNNAMED_VARIANT`` should both
-# stop appearing in the report, and that is the signal the conversion is done.
-UNNAMED_VARIANT = "(unnamed)"
+# Placeholder variant buckets, so the per-variant breakdown stays well-formed
+# whatever path a task took. Both are meant to disappear.
+UNNAMED_VARIANT = "(unnamed)"  # converted family, `natural` present, no `variant`
+LEGACY_VARIANT = "(legacy)"  # legacy path: one problem per level, by definition
+
+# TRANSITIONAL -- DELETE ENTRIES AS FAMILIES CONVERT, THEN DELETE THIS TABLE.
+# =========================================================================
+# The pre-0.5.0 naive solutions: family -> level -> body of
+# `function out = <family>(...)`, no coercion.
+#
+# This table holds **exactly one naive solution per (family, level)**. That is
+# the flaw the 0.5.0 variant form removes: the moment a family generates several
+# distinct problems per level, one entry here covers one of them and silently
+# reports PASS for the rest. It is therefore WRONG for any converted family, and
+# `resolve_natural` below refuses to consult it for a family in
+# `generators.VARIANT_MODULES` -- a converted family missing its `natural` is a
+# threading bug to be fixed, never a lookup to fall back on.
+#
+# It survives only because the conversion is staged across sessions and this
+# validator is the only check that has ever caught the undisclosed-convention
+# defect; dropping nine families' coverage while they wait their turn would open
+# exactly the hole this file exists to close. `reduce_along_dim` is converted and
+# its entry has been deleted accordingly. Delete each family's entry in the same
+# change that converts it. When the last one goes, this table is empty, the
+# `legacy` path is obviously dead, and both should be removed outright.
+LEGACY_NATURAL: dict[str, dict[int, str]] = {
+    "logical_index": {
+        1: "out = x(x > 0);",
+        2: "out = x; out(x < lo | x > hi) = NaN;",
+        3: "out = x; out(x < lo | x > hi) = NaN;",
+    },
+    "reshape_permute": {
+        1: "out = x(:);",
+        2: "y = permute(reshape(x, dims), [2 1 3]); out = y(:)';",
+        3: "y = permute(reshape(x, dims), [3 1 2]); out = y(:)';",
+    },
+    "broadcast_arith": {
+        1: "out = a + b;",
+        2: "out = (a - b) .^ 2;",
+        3: "out = (a - b) .^ 2;",
+    },
+    "sliding_window": {
+        1: "out = conv(x, ones(1, w), 'valid');",
+        2: "idx = (1:s:(numel(x)-w+1))' + (0:w-1); out = mean(x(idx), 2)';",
+        3: "idx = (1:s:(numel(x)-w+1))' + (0:w-1); out = median(x(idx), 2)';",
+    },
+    "linsolve_tolerance": {
+        1: "out = A \\ b;",
+        2: "out = A \\ b;",
+        3: "x = A \\ b; out = [x; norm(A*x - b)];",
+    },
+    "sequence_recurrence": {
+        1: "out = a + d * (0:n-1);",
+        2: "out = zeros(1, n); out(1:2) = [a b];\n"
+           " for i = 3:n; out(i) = p*out(i-1) + q*out(i-2); endfor",
+        3: "out = filter(1, [1 -p -q], [a, b - p*a, zeros(1, max(n-2, 0))]);",
+    },
+    "struct_cell_wrangle": {
+        1: "out = a + b;",
+        2: "out = [min(A); max(A)];",
+        3: "out = [min(A); max(A)];",
+    },
+    "string_parse": {
+        1: "out = sscanf(strrep(s, ',', ' '), '%f')';",
+        2: "out = sscanf(strrep(s, ',', ' '), '%f')';",
+        3: "out = sscanf(strrep(s, ',', ' '), '%f')';",
+    },
+    "signal_identity": {
+        1: "out = circshift(x, k);",
+        2: "out = real(ifft(abs(fft(x)) .^ 2));",
+        3: "out = real(ifft(abs(fft(x)) .^ 2));",
+    },
+}
 
 # Why a task could not be checked. Recorded verbatim in the JSON report so a
 # reader of the artefact does not have to guess what "unvalidated" meant.
-NO_NATURAL_REASON = (
-    "task info carries no 'natural' solution; this family has not been "
-    "converted to the variant form, so its prompt/grader agreement is UNCHECKED"
+THREADING_BUG_REASON = (
+    "family is in generators.VARIANT_MODULES but the task carries no 'natural'; "
+    "this is a generator threading bug. Refusing to fall back to LEGACY_NATURAL: "
+    "one naive solution cannot stand in for eight distinct problems"
+)
+NO_COVERAGE_REASON = (
+    "task carries no 'natural', the family is not converted, and LEGACY_NATURAL "
+    "has no entry for it, so its prompt/grader agreement is UNCHECKED"
 )
 
 
@@ -99,18 +185,39 @@ class _Task:
         return self._info
 
 
-def natural_source(info: dict[str, Any]) -> str | None:
-    """The naive solution the task itself carries, or ``None`` if it carries none.
+def _legacy_source(info: dict[str, Any]) -> str | None:
+    """Assemble the pre-0.5.0 naive solution for an unconverted family."""
+    body = LEGACY_NATURAL.get(info["family"], {}).get(info["level"])
+    if body is None:
+        return None
+    signature = info["signature"].replace("function out = ", "").strip()
+    return f"function out = {signature}\n {body}\nendfunction"
 
-    ``Variant.natural`` is the complete function source, signature included, so
-    there is nothing to assemble here. Returning ``None`` rather than raising
-    keeps a half-converted pool checkable: the converted families are still
-    scored, and the rest are reported as UNVALIDATED.
+
+def resolve_natural(info: dict[str, Any]) -> tuple[str | None, str, str]:
+    """Pick the naive solution to score, and say which path it came from.
+
+    Returns ``(source, path, reason)``. ``path`` is one of ``"variant"``,
+    ``"legacy"`` or ``"unvalidated"``; ``reason`` is non-empty only when the
+    task could not be checked at all.
+
+    The order is the whole point. ``info["natural"]`` wins whenever it is
+    present, because it was written together with the description and the
+    reference and cannot have drifted from them. ``LEGACY_NATURAL`` is consulted
+    only for a family that is *not* in ``VARIANT_MODULES``: a converted family
+    with a missing ``natural`` gets no fallback, because the fallback would be
+    one solution standing in for eight problems and would report PASS for the
+    seven it never ran.
     """
     source = info.get(NATURAL_KEY)
-    if not isinstance(source, str) or not source.strip():
-        return None
-    return source
+    if isinstance(source, str) and source.strip():
+        return source, "variant", ""
+    if info["family"] in VARIANT_MODULES:
+        return None, "unvalidated", THREADING_BUG_REASON
+    legacy = _legacy_source(info)
+    if legacy is not None:
+        return legacy, "legacy", ""
+    return None, "unvalidated", NO_COVERAGE_REASON
 
 
 def _new_family_tally() -> dict[str, Any]:
@@ -125,6 +232,11 @@ def _new_family_tally() -> dict[str, Any]:
         "tasks": 0,
         "validated_tasks": 0,
         "unvalidated_tasks": 0,
+        # "variant" | "legacy" | "unvalidated" | "mixed". A family on "legacy"
+        # is covered by the weaker pre-0.5.0 check, and every rendering of this
+        # report says so rather than letting it read as a full pass.
+        "path": None,
+        "paths": {},
     }
 
 
@@ -146,7 +258,8 @@ async def validate_level(level: int, num_tasks: int, seed: int) -> dict[str, Any
         tally = per_family.setdefault(family, _new_family_tally())
         tally["tasks"] += 1
 
-        source = natural_source(info)
+        source, path, reason = resolve_natural(info)
+        tally["paths"][path] = tally["paths"].get(path, 0) + 1
         if source is None:
             tally["unvalidated_tasks"] += 1
             unvalidated.append(
@@ -155,12 +268,16 @@ async def validate_level(level: int, num_tasks: int, seed: int) -> dict[str, Any
                     "family": family,
                     "level": level,
                     "variant": info.get(VARIANT_KEY),
-                    "reason": NO_NATURAL_REASON,
+                    "converted": family in VARIANT_MODULES,
+                    "reason": reason,
                 }
             )
             continue
 
-        variant = info.get(VARIANT_KEY) or UNNAMED_VARIANT
+        if path == "legacy":
+            variant = LEGACY_VARIANT
+        else:
+            variant = info.get(VARIANT_KEY) or UNNAMED_VARIANT
         record = await execute_candidate_locally(_Task(info), source)
 
         tally["validated_tasks"] += 1
@@ -178,11 +295,16 @@ async def validate_level(level: int, num_tasks: int, seed: int) -> dict[str, Any
                     "task": row["task"],
                     "family": family,
                     "variant": variant,
+                    "path": path,
                     "passed": record["passed"],
                     "total": record["total"],
                     "feedback": record["feedback"][-400:],
                 }
             )
+
+    for tally in per_family.values():
+        paths = [name for name, count in tally["paths"].items() if count]
+        tally["path"] = paths[0] if len(paths) == 1 else "mixed"
 
     return {
         "level": level,
@@ -193,10 +315,20 @@ async def validate_level(level: int, num_tasks: int, seed: int) -> dict[str, Any
         "unvalidated_families": sorted(
             name for name, t in per_family.items() if t["unvalidated_tasks"]
         ),
+        # Which families got the real per-variant check and which got the weaker
+        # transitional one. Recorded per level so a partial run is still honest.
+        "variant_families": sorted(
+            name for name, t in per_family.items() if t["paths"].get("variant")
+        ),
+        "legacy_families": sorted(
+            name for name, t in per_family.items() if t["paths"].get("legacy")
+        ),
+        "legacy_tasks": sum(t["paths"].get("legacy", 0) for t in per_family.values()),
         "failures": failures,
         "unvalidated": unvalidated,
         # A level is only ok when every task was checked *and* every checked
-        # task passed every hidden case. An unchecked family is not a pass.
+        # task passed every hidden case. An unchecked family is not a pass; a
+        # legacy-covered failure is still a failure.
         "ok": not failures and not unvalidated,
     }
 
@@ -210,23 +342,36 @@ def _print_level(result: dict[str, Any]) -> None:
         parts.append(f"{result['unvalidated_tasks']} UNVALIDATED")
     if result["ok"]:
         parts.append("ok")
+    if result["legacy_families"]:
+        parts.append(f"{len(result['legacy_families'])} families on LEGACY path")
     print(f"level {level}    : {' -- '.join(parts)}")
 
     for family, tally in sorted(result["families"].items()):
-        if tally["unvalidated_tasks"]:
-            print(
-                f"  ? {family:<22}UNVALIDATED -- {tally['unvalidated_tasks']}"
-                f"/{tally['tasks']} tasks carry no `natural` (family not yet"
-                " on the variant form)"
-            )
+        for record in result["unvalidated"]:
+            if record["family"] == family:
+                kind = (
+                    "converted family, `natural` NOT THREADED (generator bug)"
+                    if record["converted"]
+                    else "no `natural` and no legacy entry"
+                )
+                print(
+                    f"  ? {family:<22}UNVALIDATED -- {tally['unvalidated_tasks']}"
+                    f"/{tally['tasks']} tasks: {kind}"
+                )
+                break
         if not tally["variants"]:
             continue
         broken = sum(1 for v in tally["variants"].values() if v["passed"] != v["total"])
-        mark = "!" if broken else " "
+        legacy = tally["paths"].get("legacy", 0)
+        mark = "!" if broken else ("~" if legacy else " ")
+        coverage = (
+            "LEGACY -- one naive solution for the whole family, not per-variant"
+            if legacy
+            else f"{len(tally['variants'])} variants"
+        )
         print(
             f"  {mark} {family:<22}{tally['passed']}/{tally['total']} hidden cases"
-            f", {len(tally['variants'])} variants"
-            + (f", {broken} BROKEN" if broken else "")
+            f", {coverage}" + (f", {broken} BROKEN" if broken else "")
         )
         # Per-variant lines: every variant when something in the family is
         # broken, so a healthy variant next to a broken one is visible too.
