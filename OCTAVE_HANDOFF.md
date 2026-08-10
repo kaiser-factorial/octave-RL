@@ -1,6 +1,11 @@
 # Octave RL handoff
 
-Last updated: 2026-08-09 (taskset repair, publication, retry-scaffold measurement)
+Last updated: 2026-08-09 (taskset repair, publication, retry-scaffold measurement,
+metric correction swept through the smaller-model artifact)
+
+Every table produced across this work, in chronological order with its setup and
+the three corrections marked, is collected in the summary artifact's appendix:
+https://claude.ai/code/artifact/734753f7-bd8d-4c4b-94bb-4fac64d84455
 
 This is the shortest trustworthy orientation for continuing the Octave RL
 work. Read `README.md` for the repository map, `REPORT.md` for the full
@@ -105,11 +110,17 @@ the design work is the expensive part.
 ### What this means for the next run
 
 - **Model:** Qwen3.5-0.8B. Level 1, three attempts. It sits in the 10-35% band
-  where 4B (0.641) no longer does, has the best format compliance of the small
-  sizes, and costs a fifth of 4B.
+  (solve 0.117) where 4B (0.727) no longer does, has the best format compliance
+  of the small sizes, and costs a fifth of 4B.
 - **`batch_size = 64`, not 16.** Two 20-step runs, identical but for that: batch
-  16 produced **6 of 20 fully degenerate steps**, batch 64 produced **none**.
-  Both ran with zero infrastructure errors.
+  16 produced **6 of 20 empty batches** — every sampled group unanimous, dropped
+  by the `zero_advantage` filter, no gradient — batch 64 produced **none**. Batch
+  64 also converted 42.2% of generated rollouts into gradient against 27.8%.
+  **Correction:** an earlier version of this line said both ran with zero
+  infrastructure errors. Batch 16 did; batch 64 lost **42.9% of step 1** to
+  `ProviderError: Connection error` while the inference server was still coming
+  up, then ran clean for steps 2-20. A start-up transient, but well above the 5%
+  abort threshold — warm the server before step 1, or expect to discard it.
 - **`group_size = 8`, `max_inflight_rollouts = 8`** — prime-rl enforces
   inflight >= group, so they cannot be set independently.
 - **The guide is worth keeping on**, but it is the only part of the feedback

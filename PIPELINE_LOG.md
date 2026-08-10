@@ -30,6 +30,42 @@ entry is worth having.
 
 ---
 
+## 2026-08-09 — "Zero infrastructure errors" was read off the wrong column
+
+**Symptom.** The handoff recorded that both 20-step runs completed with zero
+infrastructure errors. Re-reading `run64.log` line by line while building the
+per-step tables: **step 1 reports `Error 42.9%`**, from an 18-warning burst of
+`ProviderError: Connection error` between 20:30:01 and 20:30:20 — the inference
+server was still coming up. Visible in the summary line as an inflated
+denominator too (`Trainable 32/112` on a batch of 64). Steps 2-20 are 0.0%.
+
+**Root cause of the wrong claim.** The check was "does any step show a nonzero
+error rate" applied to the *aggregate* impression of the log rather than to all
+twenty summary lines. One nonzero cell in step 1 of one run does not stand out
+when the following nineteen read 0.0%.
+
+**Blast radius.** No measurement. The batch-64 conclusion is unaffected — it
+still had 0 empty batches against batch 16's 6, and step 1 still shipped 32
+trainable rollouts. Only the "zero errors" sentence in `OCTAVE_HANDOFF.md` was
+wrong, now corrected there and in the summary artifact.
+
+**Why it survived.** Because it was a *reassuring* number. A claim that
+something ran clean gets less scrutiny than a claim that something broke, which
+is the same asymmetry that let the discounted-metric error stand. Reassuring
+claims need the same line-by-line check as alarming ones.
+
+**Fix.** Extract per-step tables mechanically and assert on the error column,
+rather than reading a log for impressions:
+`grep -o 'Error [0-9.]*%' run*.log | sort -u`.
+
+**Residual risk.** 42.9% is well above the 5% abort threshold. A run that
+warmed the inference server before step 1, or discarded step 1, would be
+cleaner; neither was done here, and step 1's gradient is computed from a
+non-uniformly sampled batch — the failures land on whichever rollouts were
+in flight during the window, not at random.
+
+---
+
 ## 2026-08-09 — The retry loop is worth 22-38 points, and almost none of it is the feedback
 
 **Question.** Retries clearly help. Is that because the environment *tells the
@@ -134,6 +170,20 @@ measurement. Any comparison across turn budgets, and any statement of the form
 "the policy got better", uses the raw field. The two coincide only at one turn,
 which is why single-turn evaluations never exposed this.
 
+**Second blast radius, found later the same day.** Fixing the entry that raised
+the alarm is not the same as fixing every number the defect touched. The
+smaller-model comparison (`artifacts/smaller-models-20260809/`) also ran the
+**three-attempt** scaffold and also thresholded the discounted field, so its
+solve rates and its whole group-economics table were understated too:
+0.8B 0.078 -> **0.117**, 2B 0.086 -> **0.148**, 4B 0.328 -> **0.727**. The
+recommendation survived, and one conclusion got sharper — 4B's degenerate-group
+fraction went *up* (0.500 -> 0.594), because at 0.727 its unanimous groups are
+now all-pass rather than all-fail. Same zero gradient, opposite cause.
+
+**Practice.** When a metric defect is found, grep for every artifact that used
+the same scaffold, not just the one that surfaced it. The discriminating
+question is "which runs had `max_attempts > 1`", and it takes one search.
+
 
 ## 2026-08-09 — "Truncation" in the trainer means ran-out-of-turns, not ran-out-of-tokens
 
@@ -162,7 +212,7 @@ return bool(last and last.finish_reason == "length")
 ```
 
 **`max_turns` counts as truncated.** So a rollout that used all three attempts
-without solving is "truncated" regardless of length. At a 0.078 solve rate,
+without solving is "truncated" regardless of length. At a 0.117 solve rate,
 almost every 0.8B rollout exhausts its attempts, so 85% truncation is a
 restatement of the solve rate. It also explains hypothesis 2 going the wrong
 way: a larger budget lets *more* rollouts reach attempt 3 instead of stopping

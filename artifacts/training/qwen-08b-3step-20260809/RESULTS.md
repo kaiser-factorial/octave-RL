@@ -59,7 +59,7 @@ tried and both were wrong:
 | `max_total_tokens` → 10240 | 75.0 / 93.8 / **100.0** — *worse* |
 
 `Trace.is_truncated` counts `stop_condition == "max_turns"` as truncated. At a
-0.078 solve rate almost every rollout exhausts its three attempts, so the figure
+0.117 solve rate almost every rollout exhausts its three attempts, so the figure
 is a restatement of the solve rate. A larger budget lets *more* rollouts reach
 attempt 3 rather than stopping early on length, which is why raising it made the
 number go up.

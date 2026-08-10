@@ -88,16 +88,18 @@ next experiment on the list.
 
 ## Nemotron against the models being trained
 
-| model | params | format_ok | execution | solve, L1 1-turn | token trunc |
-|---|---|---:|---:|---:|---:|
-| Nemotron-3-Nano | 30B-A3B | **0.98** | 0.736 | 0.570 | 0.0% |
-| Qwen3.5-4B | 4B | 0.92 | 0.816 | 0.328* | 3.0% |
-| Qwen3.5-2B | 2B | 0.59 | 0.243 | 0.086* | 10.0% |
-| Qwen3.5-0.8B | 0.8B | 0.64 | 0.171 | 0.078* | 2.5% |
+| model | params | format_ok | execution | solve, L1 | turns | token trunc |
+|---|---|---:|---:|---:|---:|---:|
+| Nemotron-3-Nano | 30B-A3B | **0.98** | 0.736 | 0.570 | 1 | 0.0% |
+| Qwen3.5-4B | 4B | 0.92 | 0.816 | 0.727* | 3 | 3.0% |
+| Qwen3.5-2B | 2B | 0.59 | 0.243 | 0.148* | 3 | 10.0% |
+| Qwen3.5-0.8B | 0.8B | 0.64 | 0.171 | 0.117* | 3 | 2.5% |
 
-\* Qwen figures come from the 3-attempt scaffold and were computed with the
-flawed discounted measure; they understate solve rate and are pending
-recomputation. Nemotron's is single-turn, where the two measures coincide.
+\* Qwen figures come from the 3-attempt scaffold, so they are **not** comparable
+to Nemotron's single-turn cell — see the turn-budget tables above. They were
+first published as 0.328 / 0.086 / 0.078, computed with the flawed discounted
+measure; recomputed here from `raw_case_fraction`. Nemotron's is single-turn,
+where the two measures coincide.
 
 Nemotron would saturate Level 1 immediately. It is a reference point, not a
 training candidate for this cell.

@@ -35,11 +35,19 @@ Level 1, **three attempts with the guide**, 32 tasks x 4 rollouts = 128
 rollouts per model, T=1.0. This is the scaffold `octave-qwen-4b-3step-smoke`
 actually uses.
 
-| model | reward | solve rate | execution | format_ok | **truncation** | tokens p50/p95 |
-|---|---:|---:|---:|---:|---:|---|
-| Qwen3.5-0.8B | **0.107** | 0.078 | 0.171 | 0.64 | **2.5%** | 136 / 695 |
-| Qwen3.5-2B | **0.128** | 0.086 | 0.243 | 0.59 | **10.0%** | 152 / 1536 |
-| Qwen3.5-4B | **0.641** | 0.328 | 0.816 | 0.92 | 3.0% | 140 / 825 |
+| model | reward | solve rate | *(as first published)* | execution | format_ok | **truncation** | tokens p50/p95 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Qwen3.5-0.8B | **0.107** | **0.117** | *0.078* | 0.171 | 0.64 | **2.5%** | 136 / 695 |
+| Qwen3.5-2B | **0.128** | **0.148** | *0.086* | 0.243 | 0.59 | **10.0%** | 152 / 1536 |
+| Qwen3.5-4B | **0.641** | **0.727** | *0.328* | 0.816 | 0.92 | 3.0% | 140 / 825 |
+
+**Correction, 2026-08-09.** The solve rates first published here used the same
+broken definition as the retracted turn-budget entry — discounted
+`rewards.case_fraction >= 0.999`, which cannot count a success on attempt 2 or 3.
+These cells run the **three-attempt** scaffold, so every one of them was
+understated. Recomputed from `raw_case_fraction` on the same 128 rollouts per
+model. Rewards, execution, format and truncation are unaffected. See
+`PIPELINE_LOG.md`, entry "RETRACTED: retries buy execution, not solutions".
 
 **n = 128 rollouts per model** (32 tasks x 4). An earlier version of this file
 said 256; that was a double-count from two overlapping globs. The means are
@@ -95,19 +103,27 @@ rollouts, at `group_size = 4`:
 
 | model | solve rate | dispersion | degenerate (zero-gradient) groups |
 |---|---:|---:|---:|
-| Qwen3.5-0.8B | 0.078 | **1.44** | **0.781** |
-| Qwen3.5-2B | 0.086 | **1.15** | 0.719 |
-| Qwen3.5-4B | 0.328 | 2.15 | 0.500 |
+| Qwen3.5-0.8B | 0.117 | **1.40** | **0.688** |
+| Qwen3.5-2B | 0.148 | **1.13** | 0.562 |
+| Qwen3.5-4B | 0.727 | 2.30 | 0.594 |
 
-At `group_size = 4` on Level 1, **78% of 0.8B groups carry no gradient** —
+*(Recomputed on `raw_case_fraction` with the table above. The published figures
+were 0.781 / 0.719 / 0.500 at g=4.)*
+
+At `group_size = 4` on Level 1, **69% of 0.8B groups carry no gradient** —
 which is the pathology the entire taskset repair existed to remove,
 reintroduced by model choice rather than by the pool.
 
+4B's degenerate fraction went *up* under the correction, not down, and the
+reason is worth stating: at a 0.727 solve rate its unanimity now comes from
+all-**pass** groups rather than all-fail. Same zero gradient, opposite cause,
+and a second independent signal that Level 1 is finished for 4B.
+
 But the dispersion column cuts the other way and is the more interesting
-result. 0.8B and 2B sit at 1.44 and 1.15, close to independent, where 4B is at
-2.15. Near-independent rollouts mean **larger groups buy nearly what the theory
-says they should**. Taking 0.8B to `group_size = 8` at p = 0.078 and near
-independence gives a degenerate fraction around `(1-p)^8` = 0.52, against 0.78
+result. 0.8B and 2B sit at 1.40 and 1.13, close to independent, where 4B is at
+2.30. Near-independent rollouts mean **larger groups buy nearly what the theory
+says they should**. Taking 0.8B to `group_size = 8` at p = 0.117 and near
+independence gives a degenerate fraction around `(1-p)^8` = 0.37, against 0.69
 at g=4. For 4B, correlation eats much of that gain.
 
 So the small models are not disqualified by group economics; they are
@@ -122,14 +138,14 @@ For it: cheapest by 5x, the *highest* `format_ok` of the three (0.64 against
 2B's 0.59), the *lowest* truncation (2.5% against 2B's 10%), and the lowest
 rollout correlation, so raising the group size actually works.
 
-Against it: a solve rate of 0.078 is at or just below the bottom of the 10-35%
-band — and the band should be read on solve rate, not on the fractional reward
-of 0.107, which is inflated by partial credit. At `group_size = 4` that leaves
-78% of groups gradient-free, so the group size is not optional.
+Against it: a solve rate of 0.117 sits just inside the bottom of the 10-35%
+band, with no margin — and the band should be read on solve rate, not on the
+fractional reward of 0.107. At `group_size = 4` that still leaves 69% of groups
+gradient-free, so the group size is not optional.
 
-2B buys very little for twice the price: +0.008 solve rate, worse formatting,
-and 4x the truncation. If 0.8B stalls, the informative next step is 4B on an
-L2/L3 mix, not 2B on Level 1.
+2B buys little for twice the price: +0.031 solve rate, worse formatting, and 4x
+the truncation. If 0.8B stalls, the informative next step is 4B on an L2/L3
+mix, not 2B on Level 1.
 
 If staying on 4B, move to an L2/L3 mix — 0.214 and 0.118 single-turn.
 
