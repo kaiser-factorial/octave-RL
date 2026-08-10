@@ -110,7 +110,9 @@ _STATISTICS = {
 # therefore how many values the case takes from the rng -- is identical for
 # every variant. Sizing against `s` itself would make a variant selection shift
 # the shared stream, which is what
-# `test_a_family_generates_the_same_tasks_whichever_others_are_present` forbids.
+# `test_a_family_generates_the_same_tasks_whichever_variants_are_present`
+# forbids -- and it would break it silently, since the tasks would still be
+# individually valid.
 _MAX_STRIDE = 3
 
 
@@ -127,7 +129,9 @@ def _describe(key: str, level: int) -> str:
     Level 3 saying only "...without loops" is what let `struct_cell_wrangle`
     level 3 fall from 0.792 to 0.000 while models guessed at the task from the
     family name alone. Guarded by
-    `test_level_three_descriptions_restate_their_own_task`.
+    `test_level_three_restates_its_own_task_for_every_problem`, which reads the
+    generated prompt rather than a table, so it sees all eight variants. Level 3
+    here is level 2 verbatim plus the loop clause, so it cannot drop a term.
 
     The output shape is deliberately absent: the prompt builder appends the
     shape sentence it derives from the expected values, so the prompt's claim
