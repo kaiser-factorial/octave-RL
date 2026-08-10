@@ -29,7 +29,7 @@ about learning a language's surface conventions. Read it that way.
 ## Quickstart
 
 ```bash
-prime env install <owner>/octave-rl
+prime env install kaiser-factorial/octave-rl
 ```
 
 ```python

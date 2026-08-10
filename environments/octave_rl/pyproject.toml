@@ -3,7 +3,7 @@ name = "octave-rl"
 description = "Seeded GNU Octave coding curriculum with deterministic fractional rewards"
 readme = "README.md"
 tags = ["octave", "code", "rl", "train", "eval"]
-version = "0.4.0"
+version = "0.4.1"
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "verifiers>=0.2.1,<0.3",
