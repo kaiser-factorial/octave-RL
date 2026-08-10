@@ -1,5 +1,12 @@
 # Twenty-step training run: Qwen 4B, Level 1, batch 64 / group 8.
 #
+# NOT RUN, and not the chosen plan for 2026-08-10. Costed at 4-6 h of GPU
+# (~$6-9) because 4B generation at batch 64 is far slower than the 0.8B run
+# it was modelled on; that did not fit the session cap. The ladder at
+# batch 16 was run instead -- see octave-qwen-4b-20step-batch16.toml. Kept
+# because the reasoning is still the right one if the budget allows a
+# directly-comparable pair against the 0.8B batch-64 final run.
+#
 # Purpose: give the 2026-08-06 twenty-step Qwen 4B run something it can actually
 # be compared against. That run is incomparable to everything after it for three
 # separate reasons, and only one of them is fixable by re-running:
