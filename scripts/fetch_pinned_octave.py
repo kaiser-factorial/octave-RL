@@ -14,6 +14,11 @@ Usage:
     uv run python scripts/fetch_pinned_octave.py --dest /opt/octave-rootfs
     export OCTAVE_RL_OCTAVE_ROOTFS=/opt/octave-rootfs
 
+Anonymous Docker Hub pulls are rate-limited per source address, so a shared
+host can meet ``HTTP Error 429`` through no fault of this project. Pass
+``--registry ghcr`` for the mirror of the same linux/amd64 manifest. Do not
+substitute a distro Octave: the pool was validated against 10.2.0.
+
 Requires root (or a user namespace) to chroot into the result, and about 4.5 GB
 of disk.
 """
@@ -29,9 +34,28 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
-REGISTRY = "https://registry-1.docker.io"
-AUTH = "https://auth.docker.io/token"
-REPOSITORY = "gnuoctave/octave"
+# Two registries serving the same linux/amd64 manifest. Docker Hub is the
+# default because it is what Prime's Sandbox resolver uses, and the two must
+# agree for a local validation to mean anything about a Sandbox run.
+#
+# GHCR is the fallback, and it earns its place: anonymous Docker Hub pulls are
+# rate-limited per source address, and a shared CI or agent host burns that
+# quota on other people's pulls. A 429 there is not a reason to validate against
+# `apt install octave` -- that is 8.4.0 on Ubuntu 24.04 against the pool's
+# 10.2.0, and scoring on a different interpreter is a silent correctness risk on
+# exactly the tolerance and orientation edges these tasks are built from.
+REGISTRIES = {
+    "dockerhub": {
+        "registry": "https://registry-1.docker.io",
+        "auth": "https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repository}:pull",
+        "repository": "gnuoctave/octave",
+    },
+    "ghcr": {
+        "registry": "https://ghcr.io",
+        "auth": "https://ghcr.io/token?service=ghcr.io&scope=repository:{repository}:pull",
+        "repository": "gnu-octave/octave",
+    },
+}
 # Matches harness.OCTAVE_IMAGE. Keep the two in step.
 DEFAULT_TAG = "10.2.0"
 ARCH = "amd64"
@@ -54,15 +78,15 @@ def _get(url: str, token: str | None = None, accept: str | None = None) -> bytes
         return response.read()
 
 
-def pull_token() -> str:
-    url = f"{AUTH}?service=registry.docker.io&scope=repository:{REPOSITORY}:pull"
-    return json.loads(_get(url))["token"]
+def pull_token(source: dict) -> str:
+    return json.loads(
+        _get(source["auth"].format(repository=source["repository"]))
+    )["token"]
 
 
-def resolve_manifest(token: str, tag: str) -> dict:
-    raw = json.loads(
-        _get(f"{REGISTRY}/v2/{REPOSITORY}/manifests/{tag}", token, MANIFEST_ACCEPT)
-    )
+def resolve_manifest(source: dict, token: str, tag: str) -> dict:
+    base = f"{source['registry']}/v2/{source['repository']}"
+    raw = json.loads(_get(f"{base}/manifests/{tag}", token, MANIFEST_ACCEPT))
     if "manifests" not in raw:
         return raw
     digest = next(
@@ -71,17 +95,17 @@ def resolve_manifest(token: str, tag: str) -> dict:
         if entry.get("platform", {}).get("architecture") == ARCH
         and entry.get("platform", {}).get("os") == "linux"
     )
-    return json.loads(
-        _get(f"{REGISTRY}/v2/{REPOSITORY}/manifests/{digest}", token, MANIFEST_ACCEPT)
-    )
+    return json.loads(_get(f"{base}/manifests/{digest}", token, MANIFEST_ACCEPT))
 
 
-def fetch_rootfs(dest: Path, tag: str, cache: Path) -> None:
-    token = pull_token()
-    manifest = resolve_manifest(token, tag)
+def fetch_rootfs(dest: Path, tag: str, cache: Path, registry: str) -> None:
+    source = REGISTRIES[registry]
+    token = pull_token(source)
+    manifest = resolve_manifest(source, token, tag)
     layers = manifest["layers"]
     total_mb = sum(layer["size"] for layer in layers) / 1e6
-    print(f"{REPOSITORY}:{tag} -- {len(layers)} layers, {total_mb:.0f} MB")
+    print(f"{source['repository']}:{tag} via {registry} -- "
+          f"{len(layers)} layers, {total_mb:.0f} MB")
 
     dest.mkdir(parents=True, exist_ok=True)
     cache.mkdir(parents=True, exist_ok=True)
@@ -94,7 +118,10 @@ def fetch_rootfs(dest: Path, tag: str, cache: Path) -> None:
             print(f"  layer {index}/{len(layers)} downloading "
                   f"({layer['size'] / 1e6:.0f} MB)", flush=True)
             blob.write_bytes(
-                _get(f"{REGISTRY}/v2/{REPOSITORY}/blobs/{digest}", token)
+                _get(
+                    f"{source['registry']}/v2/{source['repository']}/blobs/{digest}",
+                    token,
+                )
             )
         # Layers are applied in order; later layers legitimately overwrite
         # earlier ones, which is why this is not extracted in parallel.
@@ -157,8 +184,15 @@ def main() -> int:
     parser.add_argument("--dest", type=Path, default=Path("/opt/octave-rootfs"))
     parser.add_argument("--tag", default=DEFAULT_TAG)
     parser.add_argument("--cache", type=Path, default=Path("/tmp/octave-image-cache"))
+    parser.add_argument(
+        "--registry",
+        choices=sorted(REGISTRIES),
+        default="dockerhub",
+        help="where to pull from; ghcr serves the same amd64 manifest and is "
+             "the fallback when Docker Hub returns 429 Too Many Requests",
+    )
     args = parser.parse_args()
-    fetch_rootfs(args.dest, args.tag, args.cache)
+    fetch_rootfs(args.dest, args.tag, args.cache, args.registry)
     return verify(args.dest)
 
 

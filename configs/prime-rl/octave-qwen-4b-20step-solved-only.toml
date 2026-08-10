@@ -1,4 +1,13 @@
-# ABLATION 2026-08-10 -- solved_only reward. Qwen3.5-4B, Level 1, batch 16 / group 8.
+# ABLATION -- solved_only reward. Qwen3.5-4B, Level 1, batch 16 / group 8.
+#
+# ON HOLD as of 2026-08-10: parameterisation (0.5.0) takes priority, and shipping
+# it invalidates every 0.4.x control including this arm's. Do not launch this
+# before the pool question is settled -- see PARAMETERIZATION_DESIGN.md.
+#
+# Batch 16 here, against the 0.8B arm's 64: the "batch 64 for the small Qwens"
+# rule is about degenerate all-FAIL groups at a low solve rate. 4B is saturated
+# on Level 1 instead (solve 0.727), so its degenerate groups are unanimous
+# all-PASS and a bigger batch does not address them. Level 2 would; see below.
 #
 # Paired with `octave-qwen-4b-20step-batch16.toml`, the 4B rung of the ladder.
 # The ONLY difference is `reward_mode = "solved_only"` in the taskset's `task`

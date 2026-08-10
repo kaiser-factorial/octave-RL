@@ -1,8 +1,20 @@
-# ABLATION 2026-08-10 -- solved_only reward. Qwen3.5-0.8B, Level 1, batch 16 / group 8.
+# ABLATION -- solved_only reward. Qwen3.5-0.8B, Level 1, batch 64 / group 8.
 #
-# Paired with `octave-qwen-08b-20step.toml`, which has already run. The ONLY
-# difference is `reward_mode = "solved_only"` in the taskset's `task` table, so
-# this is a paired comparison and not a fresh baseline.
+# ON HOLD as of 2026-08-10: parameterisation (0.5.0) takes priority, and shipping
+# it invalidates every 0.4.x control including this arm's. Do not launch this
+# before the pool question is settled -- see PARAMETERIZATION_DESIGN.md. The flag
+# it exercises is merged and tested regardless.
+#
+# Paired with `octave-qwen-08b-20step-batch64.toml`. The ONLY difference is
+# `reward_mode = "solved_only"` in the taskset's `task` table, so this is a
+# paired comparison and not a fresh baseline.
+#
+# Batch 64, not the 16 the ladder used: at batch 16 / group 8 a step sees two
+# tasks, and 6 of 20 steps came back fully degenerate on this model. This flag
+# strictly reduces within-group spread -- a group where nothing is fully correct
+# now has zero advantage even where partial credit would have separated its
+# members -- so it makes that failure mode worse, and batch 16 risks a run that
+# answers nothing. Batch 64 gives eight tasks per step.
 #
 # What the flag changes: a fully correct answer is worth 1.0 and everything else
 # is worth 0.0, still discounted 0.85 / 0.60 by attempt. Per-case partial credit
@@ -24,14 +36,14 @@
 # Known cost of this flag, and itself a result worth recording: fewer groups
 # carry gradient. A group in which no rollout is fully correct now has zero
 # advantage even where partial credit would have separated its members, so the
-# empty-batch count should rise above the control's 6 of 20. If it exceeds
-# roughly 12 of 20 the run is uninterpretable -- stop it and re-run at
-# `batch_size = 64`, and give the control the same treatment.
+# empty-batch count should rise above the control's 0 of 20 at this batch size.
+# If it exceeds roughly 6 of 20 the run is telling you the reward is too sparse
+# for this model at Level 1, which is itself the answer.
 #
 # Everything below is the control config unchanged, except `output_dir` and the
 # added `reward_mode`.
 #
-# Twenty-step training run: Qwen3.5-0.8B, Level 1, group_size 8.
+# Twenty-step training run: Qwen3.5-0.8B, Level 1, group_size 8, BATCH 64.
 #
 # The first real training against the repaired taskset (0.3.x) with the family
 # holdout in place. Promoted from the 2026-08-09 three-step smoke, which passed
@@ -89,7 +101,7 @@ max_steps = 20
 # 8192 in the smoke with no cost and no instability. `max_total_tokens` stays at
 # 6144 -- raising it to 10240 was measured and produced no benefit.
 seq_len = 8192
-output_dir = "training_outputs/octave-qwen-08b-20step-solved-only"
+output_dir = "training_outputs/octave-qwen-08b-20step-batch64-solved-only"
 clean_output_dir = true
 
 [deployment]
@@ -105,7 +117,7 @@ vision_encoder_attr = "model.visual"
 language_model_attr = "model.language_model"
 
 [orchestrator]
-batch_size = 16
+batch_size = 64
 group_size = 8
 max_inflight_rollouts = 8
 collect_inference_metrics = false
