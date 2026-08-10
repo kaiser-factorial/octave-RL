@@ -25,8 +25,9 @@ Success criterion 1 asks for "seed overlap well below 100%". **That is not
 achievable at this pool size under any scheme, and the criterion should be
 struck.** With 8 variants and ~50 tasks per family, each variant appears in a
 500-task pool with probability ≈ 0.999, so two seeds contain the same prompt set
-whatever the variant selection rule. Measured at two families converted: 72 of
-72 prompts shared between seed `0` and seed `20260808`.
+whatever the variant selection rule. Measured at three families converted: 93 of
+94 prompts shared between seed `0` and seed `20260808`, and the one exception is
+a shape sentence that varies with the draw rather than a different question.
 
 Drawing the variant from the rng rather than round-robin does not change this.
 It only makes per-variant counts multinomial — Binomial(50, 1/8), a spread of
@@ -35,10 +36,8 @@ collect. Round-robin gives exact counts and is strictly better.
 
 **What follows: a seed split still holds out inputs, not questions.** Parameter-
 isation raises the number of problems; it does not turn a seed into a problem
-split. Measured at three families: 93 of 94 prompts shared between seeds, and
-the single exception is a shape sentence that varies with the draw, not a
-different question. **The variant holdout is the mechanism that produces a
-held-out problem**, and it is the one to quote a generalization number from. That is a
+split. **The variant holdout is the mechanism that produces a held-out
+problem**, and it is the one to quote a generalization number from. That is a
 narrower claim than this document originally made for the change, and it is the
 honest one.
 

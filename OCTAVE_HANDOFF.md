@@ -1,7 +1,7 @@
 # Octave RL handoff
 
-Last updated: 2026-08-10 (solved-only reward ablation prepared; parameterisation
-still not started)
+Last updated: 2026-08-10 (parameterisation started -- three families, 94
+prompts; solved-only reward ablation prepared and held)
 
 Every table produced across this work, in chronological order with its setup and
 the three corrections marked, is collected in the summary artifact's appendix:
@@ -63,24 +63,21 @@ the policy toward "produce something that runs and is nearly right" instead of
 nobody fully solved the task, which means **more empty batches**, and that count
 is a result rather than a nuisance.
 
-- Configs: `configs/prime-rl/octave-{qwen-08b,qwen-4b,nemotron}-20step-solved-only.toml`.
-  The two Qwen ones are byte-identical to their control configs except for
-  `output_dir` and the flag, so both are paired comparisons *if the control runs
-  can be produced*. The 0.8B batch-16 control is written up here; **the 4B rung
-  has no committed artifact and no per-step table anywhere in this repository**,
-  so confirm its logs exist or budget a control arm for it.
-- **Nemotron has never been trained here** — only evaluated through hosted
-  Prime Inference. Its config is a best guess, is marked UNVALIDATED in its own
-  header, and carries three hazards (renderer/thinking, 80 GB-class topology,
-  LoRA on an MoE). It needs a three-step smoke and its own control arm.
+- Configs: `configs/prime-rl/octave-qwen-{08b,4b}-20step-solved-only.toml`, each
+  byte-identical to a control config except for `output_dir` and the flag.
+  Training comparisons are **Qwen-only**; the Nemotron arm was considered and
+  dropped, because Nemotron has never been trained here and would have needed a
+  new topology, a renderer guess and its own control.
+- **Confirm the controls exist before treating either as paired.** The 0.8B
+  batch-64 control is written up here. **The 4B rung has no committed artifact
+  and no per-step table anywhere in this repository** — produce its logs or
+  budget a control arm for it.
 - Read outcomes from the new `solved` metric and `raw_case_fraction`. The two
   arms define reward differently, so their reward columns are **not comparable**.
-- Not launched, and now deliberately deferred: parameterisation is a breaking
-  change to task semantics, so shipping 0.5.0 invalidates every 0.4.x control
-  including this arm's. Settle the pool first. The session that prepared it also
-  had no GPU, no `prime` CLI and no Prime credential.
-- The Nemotron arm is dropped: training comparisons are Qwen-only. The 0.8B arm
-  moved to batch 64.
+- **On hold, deliberately.** Parameterisation is a breaking change to task
+  semantics, so shipping 0.5.0 invalidates every 0.4.x control including this
+  arm's. Settle the pool first. The session that prepared it also had no GPU, no
+  `prime` CLI and no Prime credential.
 
 ## Start here: what changed on 2026-08-09
 
