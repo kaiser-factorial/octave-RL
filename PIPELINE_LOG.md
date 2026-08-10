@@ -30,6 +30,69 @@ entry is worth having.
 
 ---
 
+## 2026-08-10 — A level-2 prompt whose answer equalled its level 1, in the file that warns about it
+
+**Symptom.** `reduce_along_dim`, the worked exemplar for the 0.5.0 variant form,
+shipped a level-2 step that trimmed the `k` largest and `k` smallest values of
+each slice. For the two median variants the level-2 answer equalled the plain
+level-1 statistic of the same matrix on **240 of 240 measured cases**. Two of
+eight variants were a distinct prompt that was not a distinct problem.
+
+**Root cause.** A symmetric trim preserves the median exactly, by construction:
+discarding equal counts from both ends of a sorted slice cannot move its centre.
+The trim was chosen specifically to avoid the *one-sided* version of this bug --
+drop the k largest and `min` is unchanged, drop the k smallest and `max` is
+unchanged -- and the module docstring said so. The symmetric case moves `min`
+and `max` and was not checked against the remaining four statistics.
+
+**Blast radius.** No measurement, and no published claim: caught on the branch
+before any model saw the pool. Had it survived, two of eight variants would have
+inflated the distinct-*prompt* count while contributing nothing to distinct
+*problems*, and the per-variant sweep would have shown those two as anomalously
+easy at level 2 with no obvious reason.
+
+**Why it survived.** **No validator in this repository can catch it, and none
+ever will.** `validate_natural_solutions.py` scores the naive solution and
+`validate_local_runtime.py` scores the reference; both pass a degenerate level 2,
+because both compute exactly what the description asks for. The description is
+what fails -- it asks for something that happens to equal the previous level. The
+green checks were measuring "is this prompt satisfiable", and the question was
+"is this prompt a new problem". That is the same shape as every earlier entry
+here: a check adjacent to the thing that mattered.
+
+It was caught by a **peer agent converting a different family**, which hit the
+identical degeneracy in `sliding_window` (a symmetric trim leaves the median of
+a window unchanged too), rejected the trim ladder for its own family, and
+reported the exemplar as suspect. Cross-checking between independently authored
+families found what no test did.
+
+**Fix.** Level 2 now replaces each slice by its **running total** and then
+reduces. That changes the values being reduced rather than which of them are
+kept, so every statistic moves. The trim is gone, along with the slice-length
+constraint it needed. `sliding_window` independently rejected the same ladder
+and uses dilation for the same reason.
+
+Deliberately not fixed by special-casing the median: a per-variant ladder would
+make the family's level-2 semantics depend on which variant is drawn, which is
+harder to state in a prompt and harder to check.
+
+**Verification.** Level-2 answer against the plain level-1 statistic of the same
+matrix, 60 seeds x 6 cases per variant: was 240/240 identical for both median
+variants, now at most 4/360 for any of the eight, which is ordinary coincidence
+on small integer draws. Full gate after the fix: `validate_natural_solutions.py
+--num-tasks 500` reports **9,000/9,000 hidden cases, zero failures** across three
+levels on the pinned Octave 10.2.0.
+
+**Residual risk.** The degeneracy check is a script that was run, not a test that
+runs. It should be a test asserting that no variant's level-2 answer matches its
+level-1 statistic on a majority of cases -- otherwise the next family to convert
+gets to rediscover this the same way. Note also that the check compares against
+the *level-1 statistic*, not against every simpler function a model might guess;
+a level-2 step that collapses onto something other than level 1 would still pass
+it.
+
+---
+
 ## 2026-08-10 — A flag called inert after one immediate re-read
 
 **Symptom.** `prime env push --visibility PUBLIC` on 0.4.1, then

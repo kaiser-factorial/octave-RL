@@ -10,12 +10,15 @@ sys.path.insert(
 )
 
 import harness as harness_module
+import numpy as np
 import octave_rl as octave_environment
 import pytest
+from executors import execute_candidate_locally, runtime_description
 from generators import (
     DEFAULT_HELDOUT_FAMILIES,
     DEFAULT_HELDOUT_VARIANTS,
     FAMILY_NAMES,
+    VARIANT_MODULES,
     build_tasks,
     declared_variants,
     training_families,
@@ -204,6 +207,7 @@ def test_level_three_restates_its_own_task_for_every_problem() -> None:
         "sequence_recurrence",
         "struct_cell_wrangle",
         "signal_identity",
+        "sliding_window",
     }
     level_two = _descriptions_by_problem(2)
     level_three = _descriptions_by_problem(3)
@@ -297,6 +301,62 @@ def test_a_converted_family_ships_a_naive_solution_with_every_task() -> None:
             # A naive solution that coerces is not naive. The whole signal is
             # that a competent reader's first attempt passes as written.
             assert "(:)" not in natural, f"{task['task']} naive solution coerces"
+
+
+class _VariantTask:
+    """The minimal surface ``execute_candidate_locally`` reads from a task."""
+
+    def __init__(self, variant) -> None:
+        self.fn_name = variant.signature.split("=")[1].split("(")[0].strip()
+        self.cases = variant.cases
+        self.tolerance = variant.tolerance
+
+    def model_dump(self):
+        return {
+            "fn_name": self.fn_name,
+            "cases": self.cases,
+            "tolerance": self.tolerance,
+        }
+
+
+def _octave_available() -> bool:
+    try:
+        runtime_description()
+    except Exception:  # noqa: BLE001 - any unavailability means skip
+        return False
+    return True
+
+
+@pytest.mark.skipif(
+    not _octave_available(),
+    reason="needs an Octave interpreter; run scripts/fetch_pinned_octave.py",
+)
+def test_no_variant_has_a_level_two_its_level_one_solution_already_solves() -> None:
+    """Level 2 must be a different *problem*, not merely a different sentence.
+
+    `reduce_along_dim` shipped a level-2 step -- trim the k largest and k
+    smallest -- that preserves the median exactly, so both median variants had a
+    level-2 answer identical to their level 1 on 240 of 240 cases. Neither
+    reference-based validator can catch that, and neither can the naive-solution
+    validator: all three pass a degenerate level 2, because all three compute
+    what the description asks for. It is the description that fails to ask for
+    something new. See PIPELINE_LOG, 2026-08-10.
+
+    So the check has to be this one: run each variant's *level-1* naive solution
+    against its *level-2* hidden cases. Full marks there means level 2 asked for
+    nothing new.
+    """
+    for family, module in VARIANT_MODULES.items():
+        for key in module.VARIANT_KEYS:
+            level_one = module.build(np.random.default_rng(4242), 1, key)
+            level_two = module.build(np.random.default_rng(4242), 2, key)
+            record = asyncio.run(
+                execute_candidate_locally(_VariantTask(level_two), level_one.natural)
+            )
+            assert record["fraction"] < 1.0, (
+                f"{family}:{key} level 2 is fully solved by its own level-1 "
+                f"solution -- a distinct prompt that is not a distinct problem"
+            )
 
 
 def test_unknown_variant_names_are_rejected() -> None:

@@ -19,20 +19,29 @@ to include the three that fail differently -- ``sum`` is order-insensitive,
 ``max``/``min`` are selections rather than aggregates, and ``range`` composes
 two reductions.
 
-## The level ladder, and why it is trimming
+## The level ladder, and the trim that had to be abandoned
 
 The ladder is retained from 0.4.x: level 3 is level 2 plus a vectorization
-constraint, and level 2 is level 1 plus a parameter. Trimming the ``k`` largest
-**and** ``k`` smallest values is what generalises across all eight variants
-without going degenerate. A one-sided trim would have: drop the k largest and
-``min`` is unchanged, drop the k smallest and ``max`` is unchanged. Either way
-two of the eight variants would render a level-2 prompt whose answer is
-identical to its level 1 -- a distinct prompt that is not a distinct problem,
-which is the exact failure this whole change exists to remove.
+constraint. Level 2 replaces each slice by its **running total** and then
+reduces, which moves all six statistics away from their level-1 values.
 
-Hidden cases guarantee the slice is long enough that trimming leaves at least
-two values, so no case is decided by an empty-reduction edge case that the
-prompt does not describe.
+**This is the second ladder here; the first one shipped broken.** It trimmed the
+``k`` largest and ``k`` smallest values of each slice. That was chosen because a
+*one-sided* trim leaves ``min`` (or ``max``) unchanged -- but a symmetric trim
+leaves the **median** unchanged, exactly and by construction, so
+``median-columns`` and ``median-rows`` rendered a level-2 prompt whose answer
+equalled its level 1 on 240 of 240 measured cases. Two of eight variants were a
+distinct prompt that was not a distinct problem: the precise failure this whole
+change exists to remove, committed in the file whose docstring warns about it.
+
+Nothing could have caught it downstream. The reference and the naive solution
+both pass a degenerate level 2, because both compute the thing the description
+asks for -- it is the *description* that fails to ask for something new. See
+``PIPELINE_LOG.md`` for the entry.
+
+A running total moves every statistic because it changes the values being
+reduced rather than which of them are kept. It also stays in exact integer
+arithmetic, so no variant here rests on a floating-point tolerance.
 """
 
 from __future__ import annotations
@@ -91,26 +100,16 @@ def _describe(key: str, level: int) -> str:
     slice_word = "column" if axis == "columns" else "row"
     if level == 1:
         return f"Return the {english} of each {slice_word} of A."
-    trimmed = (
-        f"Return the {english} of each {slice_word} of A, after discarding the "
-        f"k largest and the k smallest values of that {slice_word}. Ties count "
-        f"separately, so a {slice_word} always loses exactly 2*k values."
+    direction = "top to bottom" if axis == "columns" else "left to right"
+    running = (
+        f"Replace each {slice_word} of A by its running total from {direction}, "
+        f"so that entry i of a {slice_word} becomes the sum of entries 1 through "
+        f"i of that {slice_word}. Then return the {english} of each "
+        f"{slice_word} of the result."
     )
     if level == 2:
-        return trimmed
-    return trimmed + " Do not use for/while loops."
-
-
-def _trim(slice_values: np.ndarray, k: int) -> np.ndarray:
-    """Drop the k largest and k smallest, counting ties separately.
-
-    Sorting and slicing by position is what "ties count separately" means, and
-    it is why the description says so: dropping *values* equal to the extremes
-    would remove a variable number of entries and the answer would depend on a
-    convention the prompt never stated.
-    """
-    ordered = np.sort(slice_values)
-    return ordered[k : len(ordered) - k]
+        return running
+    return running + " Do not use for/while loops."
 
 
 def build(rng: np.random.Generator, level: int, key: str) -> Variant:
@@ -123,64 +122,47 @@ def build(rng: np.random.Generator, level: int, key: str) -> Variant:
 
     cases: list[dict] = []
     for _ in range(6):
-        if level == 1:
-            k = 0
-            rows = int(rng.integers(3, 7))
-            columns = int(rng.integers(2, 5))
-        else:
-            k = int(rng.integers(1, 3))
-            # Long enough along the reduced axis that trimming leaves >= 2
-            # values, so no hidden case turns on an empty reduction.
-            minimum = 2 * k + 2
-            rows = int(rng.integers(minimum, minimum + 4)) if np_axis == 0 else int(rng.integers(2, 5))
-            columns = int(rng.integers(2, 5)) if np_axis == 0 else int(rng.integers(minimum, minimum + 4))
+        # One draw pattern for every variant and level, so a variant selection
+        # cannot shift the shared rng stream. At least three entries along the
+        # reduced axis, so a running total is not a near-no-op.
+        rows = int(rng.integers(3, 7)) if np_axis == 0 else int(rng.integers(2, 5))
+        columns = int(rng.integers(2, 5)) if np_axis == 0 else int(rng.integers(3, 7))
         A = rng.integers(-9, 15, (rows, columns))
 
-        if k == 0:
-            out = reducer(A.astype(float), axis=np_axis)
-        else:
-            trimmed = np.apply_along_axis(_trim, np_axis, A.astype(float), k)
-            out = reducer(trimmed, axis=np_axis)
+        values = A.astype(float)
+        if level > 1:
+            values = np.cumsum(values, axis=np_axis)
+        out = reducer(values, axis=np_axis)
         # "Each row" reduces to one value per row, which Octave returns as a
         # column. Match that, or the natural solution fails on orientation
         # alone -- the defect this project has shipped three times.
         expected = out.reshape(-1, 1) if np_axis == 1 else out.reshape(1, -1)
-        args = [A.tolist()] if level == 1 else [A.tolist(), k]
-        cases.append({"args": args, "expected": expected.tolist()})
+        cases.append({"args": [A.tolist()], "expected": expected.tolist()})
 
-    signature = (
-        "function out = reduce_along_dim(A)"
-        if level == 1
-        else "function out = reduce_along_dim(A, k)"
-    )
+    signature = "function out = reduce_along_dim(A)"
     expression = _STATISTICS[statistic][2]
+
+    # The naive reading of "the mean of each column" is `mean(A)`, whose default
+    # dim is 1. Writing the naive solution the lazy way is the point: if the
+    # graded orientation disagrees with it, this fails and the variant does not
+    # ship.
+    def _lazy(text: str) -> str:
+        if dim != 1:
+            return text
+        return text.replace("(A, 1)", "(A)").replace("(A, [], 1)", "(A)")
 
     if level == 1:
         body = " out = " + expression.format(T="A", dim=dim) + ";"
-        # The natural reading of "the mean of each column" is `mean(A)`, whose
-        # default dim is 1. Writing the naive solution the lazy way is the
-        # point: if the graded orientation disagrees with it, this fails and
-        # the variant does not ship.
-        natural_expr = expression.format(T="A", dim=dim)
-        if dim == 1:
-            natural_expr = (
-                expression.format(T="A", dim=dim)
-                .replace("(A, 1)", "(A)")
-                .replace("(A, [], 1)", "(A)")
-            )
-        natural = " out = " + natural_expr + ";"
+        natural = " out = " + _lazy(expression.format(T="A", dim=dim)) + ";"
     else:
-        # Sort along the reduced axis, drop k from each end, then reduce.
-        sort_dim = dim
-        trim_index = (
-            "S(k+1:end-k, :)" if dim == 1 else "S(:, k+1:end-k)"
+        running = f"cumsum(A, {dim})"
+        body = " C = " + running + ";\n out = " + expression.format(T="C", dim=dim) + ";"
+        lazy_running = "cumsum(A)" if dim == 1 else running
+        natural = (
+            " C = " + lazy_running + ";\n out = "
+            + _lazy(expression.format(T="C", dim=dim)).replace("C, 1)", "C)")
+            .replace("C, [], 1)", "C)") + ";"
         )
-        body = (
-            f" S = sort(A, {sort_dim});\n"
-            f" T = {trim_index};\n"
-            " out = " + expression.format(T="T", dim=dim) + ";"
-        )
-        natural = body
 
     reference = f"{signature}\n{body}\nendfunction"
     natural_source = f"{signature}\n{natural}\nendfunction"

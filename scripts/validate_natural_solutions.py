@@ -106,8 +106,8 @@ LEGACY_VARIANT = "(legacy)"  # legacy path: one problem per level, by definition
 # It survives only because the conversion is staged across sessions and this
 # validator is the only check that has ever caught the undisclosed-convention
 # defect; dropping a family's coverage while it waits its turn would open exactly
-# the hole this file exists to close. `reduce_along_dim` and `broadcast_arith`
-# are converted and their entries are gone. Delete each family's entry in the
+# the hole this file exists to close. `reduce_along_dim`, `broadcast_arith` and
+# `sliding_window` are converted and their entries are gone. Delete each family's entry in the
 # same change that converts it. When the last one goes, this table is empty, the
 # `legacy` path is obviously dead, and both should be removed outright.
 LEGACY_NATURAL: dict[str, dict[int, str]] = {
@@ -120,11 +120,6 @@ LEGACY_NATURAL: dict[str, dict[int, str]] = {
         1: "out = x(:);",
         2: "y = permute(reshape(x, dims), [2 1 3]); out = y(:)';",
         3: "y = permute(reshape(x, dims), [3 1 2]); out = y(:)';",
-    },
-    "sliding_window": {
-        1: "out = conv(x, ones(1, w), 'valid');",
-        2: "idx = (1:s:(numel(x)-w+1))' + (0:w-1); out = mean(x(idx), 2)';",
-        3: "idx = (1:s:(numel(x)-w+1))' + (0:w-1); out = median(x(idx), 2)';",
     },
     "linsolve_tolerance": {
         1: "out = A \\ b;",
