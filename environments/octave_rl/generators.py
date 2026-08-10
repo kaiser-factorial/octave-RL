@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+from families import broadcast_arith as _broadcast_arith_variants
 from families import reduce_along_dim as _reduce_along_dim_variants
 from specs import Variant, resolve_variants, variant_for_index
 
@@ -22,6 +23,7 @@ Task = dict[str, Any]
 # `_row` go away.
 VARIANT_MODULES: dict[str, Any] = {
     "reduce_along_dim": _reduce_along_dim_variants,
+    "broadcast_arith": _broadcast_arith_variants,
 }
 
 

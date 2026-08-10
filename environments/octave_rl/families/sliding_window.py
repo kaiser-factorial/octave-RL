@@ -172,7 +172,7 @@ def _describe(key: str, level: int) -> str:
 
 def build(rng: np.random.Generator, level: int, key: str) -> Variant:
     statistic, strided = _parse(key)
-    english, reducer, window_form, matrix_form = _STATISTICS[statistic]
+    _, reducer, window_form, matrix_form = _STATISTICS[statistic]
 
     cases: list[dict] = []
     for _ in range(6):

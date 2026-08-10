@@ -105,10 +105,10 @@ LEGACY_VARIANT = "(legacy)"  # legacy path: one problem per level, by definition
 #
 # It survives only because the conversion is staged across sessions and this
 # validator is the only check that has ever caught the undisclosed-convention
-# defect; dropping nine families' coverage while they wait their turn would open
-# exactly the hole this file exists to close. `reduce_along_dim` is converted and
-# its entry has been deleted accordingly. Delete each family's entry in the same
-# change that converts it. When the last one goes, this table is empty, the
+# defect; dropping a family's coverage while it waits its turn would open exactly
+# the hole this file exists to close. `reduce_along_dim` and `broadcast_arith`
+# are converted and their entries are gone. Delete each family's entry in the
+# same change that converts it. When the last one goes, this table is empty, the
 # `legacy` path is obviously dead, and both should be removed outright.
 LEGACY_NATURAL: dict[str, dict[int, str]] = {
     "logical_index": {
@@ -120,11 +120,6 @@ LEGACY_NATURAL: dict[str, dict[int, str]] = {
         1: "out = x(:);",
         2: "y = permute(reshape(x, dims), [2 1 3]); out = y(:)';",
         3: "y = permute(reshape(x, dims), [3 1 2]); out = y(:)';",
-    },
-    "broadcast_arith": {
-        1: "out = a + b;",
-        2: "out = (a - b) .^ 2;",
-        3: "out = (a - b) .^ 2;",
     },
     "sliding_window": {
         1: "out = conv(x, ones(1, w), 'valid');",
@@ -433,9 +428,27 @@ async def main() -> int:
             for family, variant in [(failure["family"], failure["variant"])]
         }
     )
+    variant_families = sorted(
+        {f for level in summary["levels"] for f in level["variant_families"]}
+    )
+    legacy_families = sorted(
+        {f for level in summary["levels"] for f in level["legacy_families"]}
+    )
+    summary["variant_families"] = variant_families
+    summary["legacy_families"] = legacy_families
+    summary["legacy_tasks"] = sum(level["legacy_tasks"] for level in summary["levels"])
+    # A converted family's legacy entry is inert -- `resolve_natural` never
+    # reaches it -- but leaving it behind is how the transitional table stops
+    # shrinking and starts looking permanent. Report it rather than trusting
+    # everyone to remember rule 4 of the conversion.
+    summary["stale_legacy_entries"] = sorted(
+        set(LEGACY_NATURAL) & set(VARIANT_MODULES)
+    )
     # ``ok`` keeps its name and its meaning of "this pool is shippable", which
     # now requires that every task was actually checked. A family that cannot be
-    # checked is reported, not absolved.
+    # checked is reported, not absolved. A legacy-covered family that fails is a
+    # failure like any other -- the legacy path is a weaker check, not a softer
+    # verdict.
     summary["ok"] = all(level["ok"] for level in summary["levels"])
 
     print(f"elapsed     : {summary['elapsed_seconds']}s")
@@ -448,6 +461,28 @@ async def main() -> int:
             f"{', '.join(unvalidated_families)}"
         )
         print("              these are NOT passes; convert them to the variant form")
+    if legacy_families:
+        # Printed on every run, pass or fail. A PASS carried mostly by the
+        # legacy path is a much smaller claim than a PASS, and the difference
+        # has to be visible without opening the JSON.
+        print(
+            f"legacy      : {len(legacy_families)} of "
+            f"{len(legacy_families) + len(variant_families)} families still on "
+            f"the transitional one-solution-per-level path "
+            f"({summary['legacy_tasks']} tasks)"
+        )
+        print(f"              {', '.join(legacy_families)}")
+        print(
+            "              these are covered, but NOT per-variant; a PASS here "
+            "does not mean\n              their variants are checked, because "
+            "they have none yet"
+        )
+    if summary["stale_legacy_entries"]:
+        print(
+            "stale       : LEGACY_NATURAL still has entries for converted "
+            f"families -- {', '.join(summary['stale_legacy_entries'])}"
+        )
+        print("              they are never consulted; delete them")
     print(f"result      : {'PASS' if summary['ok'] else 'FAIL'}")
 
     if args.report:
