@@ -1,9 +1,11 @@
 # Design: parameterised task descriptions
 
-**Status: in progress since 2026-08-10. Three of ten families converted
-(`reduce_along_dim`, `broadcast_arith`, `sliding_window` -- the three the plan
-below scopes as the starting set), the validator parameterised, the holdout
-built, both gates green.** Read `OCTAVE_HANDOFF.md` first, then this.
+**Status: conversion COMPLETE, 2026-08-10. All ten families on the variant
+form, 80 variants, 240 distinct prompts, the validator parameterised, both
+holdouts shipped, the naive-solution gate green at 9,000/9,000 with no family on
+the transitional path.** What remains is measurement, not construction: no model
+had seen these prompts when the conversion landed. Read `OCTAVE_HANDOFF.md`
+first, then this.
 
 ## Decisions taken on 2026-08-10
 
@@ -14,10 +16,11 @@ built, both gates green.** Read `OCTAVE_HANDOFF.md` first, then this.
 | family or variant holdout | **both**, as config fields; the variant holdout is new |
 | how the variant is chosen | round-robin on the task's position in its family's stream, never an rng draw |
 
-Measured after the three starter families: **94 distinct prompts, up from 30**,
-and `validate_natural_solutions.py --num-tasks 500` reports **9,000/9,000 hidden
-cases** on the pinned Octave 10.2.0. On the same trajectory all ten families
-reach roughly 240, above the ≥200 target.
+Measured with all ten families converted: **240 distinct prompts, up from 30** --
+the ≥200 target, hit exactly on the projection. `validate_natural_solutions.py
+--num-tasks 500` reports **9,000/9,000 hidden cases** on the pinned Octave
+10.2.0, with every variant checked by its own naive solution rather than one
+solution standing in for eight.
 
 ### Correction to the measurement plan below: seed overlap cannot fall
 
@@ -189,6 +192,13 @@ changes, so:
 - Re-measure the headline cells before quoting anything.
 
 ## Cost and shape of the work
+
+**What it actually cost.** The estimate below said half a session for spec
+plumbing plus three families, and a second session for the remaining seven. All
+ten landed in one session, because the per-family work parallelises cleanly once
+the contract and one worked exemplar exist. The compute estimate was wrong in
+the other direction: validation ran locally against a pinned rootfs for $0, and
+the only spend was the per-variant model sweep.
 
 | step | effort | compute |
 |---|---|---|

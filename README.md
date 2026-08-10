@@ -18,10 +18,10 @@ checkpoints, and model weights are intentionally not committed.
 - Ten generator families spanning reductions, logical indexing,
   reshape/permutation, broadcasting, sliding windows, linear solves,
   recurrences, structs/cells, string parsing, and signal identities.
-- **Eight variants per converted family** — a named choice of statistic, axis or
-  operator that changes what the function must compute, not merely which numbers
-  test it. Two of ten families are converted; the pool carries 72 distinct
-  prompts against 30 before.
+- **Eight variants per family** — a named choice of statistic, axis or operator
+  that changes what the function must compute, not merely which numbers test it.
+  All ten families are converted: **80 variants, 240 distinct prompts** against
+  30 before.
 - Three difficulty levels with deterministic generation from
   `(level, seed, task index)`.
 - Six hidden cases per task and fractional case-level correctness.
@@ -300,10 +300,10 @@ seed holds out the hidden test *inputs*, not the question. RL here can therefore
 drive toward memorising a handful of function bodies, and a seed-disjoint
 evaluation cannot detect it.
 
-**Since 0.5.0 a converted family carries eight variants** — a named choice of
+**Since 0.5.0 every family carries eight variants** — a named choice of
 statistic, axis or operator that changes what the function must compute — so it
-contributes 24 distinct prompts across the three levels instead of 3. Two of ten
-families are converted, and the pool is at 72 distinct prompts.
+contributes 24 distinct prompts across the three levels instead of 3. The pool
+holds **240 distinct prompts**.
 
 **Parameterisation does not make a seed split into a problem split, and cannot.**
 With 8 variants and ~50 tasks per family, every variant appears in every 500-task
@@ -331,7 +331,7 @@ complement(declared_variants(), DEFAULT_HELDOUT_VARIANTS)   # the trained varian
 | holdout | costs | holds out | use when |
 | --- | --- | --- | --- |
 | `families` | a fifth of training coverage | whole families, so an unpracticed problem *type* | testing transfer to an idiom never trained |
-| `variants` | nothing — every family stays in training | problems inside families the model trains on | testing whether a practiced idiom generalizes across its parameters |
+| `variants` | nothing — every family stays in training | a quarter of the problems, inside families the model trains on | testing whether a practiced idiom generalizes across its parameters |
 
 The variant holdout is the stricter test and the cheaper one, but its **default
 selection is a positional placeholder** — the last two variants of each family,
