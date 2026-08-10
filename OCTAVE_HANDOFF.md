@@ -1,6 +1,6 @@
 # Octave RL handoff
 
-Last updated: 2026-08-09 (taskset-repair and publication session)
+Last updated: 2026-08-09 (taskset repair, publication, retry-scaffold measurement)
 
 This is the shortest trustworthy orientation for continuing the Octave RL
 work. Read `README.md` for the repository map, `REPORT.md` for the full
@@ -31,7 +31,7 @@ rate", which is false. Recomputed correctly:
 | model | L1 | L2 | L3 |
 |---|---|---|---|
 | Nemotron, 1 -> 3 turns | 0.570 -> 0.828 | 0.504 -> 0.750 | 0.309 -> 0.527 |
-| Qwen3.5-4B, 1 -> 3 turns | 0.332 -> 0.715 | 0.230 -> 0.562 | 0.141 -> 0.500 |
+| Qwen3.5-4B, 1 -> 3 turns | 0.332 -> 0.715 | 0.230 -> 0.562 | 0.141 -> 0.359 |
 
 **Retries are worth +0.22 to +0.38 solve rate.** The two fields coincide only at
 one turn, which is why every single-turn evaluation in the repository is
