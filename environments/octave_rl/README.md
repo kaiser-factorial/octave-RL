@@ -11,6 +11,44 @@ benchmark and its hidden test cases are unbounded. It is **not** an unbounded
 supply of distinct problems — see "What '500 tasks' means" below before
 reporting a number.
 
+## Contents
+
+| Section | In one line |
+|---|---|
+| [Models named here](#models-named-here) | The full slugs behind "Nemotron" and "Qwen *size*", fixed once so no number is ambiguous. |
+| [What this environment actually measures](#what-this-environment-actually-measures) | A failure taxonomy: this is a language-fluency benchmark far more than a reasoning one. |
+| [Quickstart](#quickstart) | Install, and the two lines that load the environment. |
+| [Choosing a runtime](#choosing-a-runtime) | Where candidate code executes — Prime Sandbox, local subprocess, or a pinned rootfs — and when each is honest. |
+| [Families, levels, and difficulty](#families-levels-and-difficulty) | The ten task families, what each one exercises, and measured per-family pass rates. |
+| [What "500 tasks" means](#what-500-tasks-means-and-what-a-held-out-pool-holds-out) | The pool carries 30 distinct prompts; a held-out seed holds out inputs, not questions. |
+| [→ Holding out a family](#holding-out-a-family-gives-you-a-real-one) | The `families` field, and the train / validation / test split it makes possible. |
+| [Reward](#reward) | Fraction of hidden cases passed, the attempt discount, and the diagnostic metrics reported alongside. |
+| [Output shape is graded](#output-shape-is-graded) | Orientation counts, every prompt states the shape it will be compared against, and why. |
+| [What a multi-turn score means](#what-a-multi-turn-score-means) | Most of the gap between a 1-turn and a 3-turn number is resampling, not capability. |
+| [Multi-turn and the optional guide](#multi-turn-and-the-optional-guide) | The retry loop, the LLM guide, the discount table, and the credential the guide needs on disk. |
+| [Scoring boundary](#scoring-boundary) | What the interpreter running candidate code can and cannot see. |
+| [Configuration](#configuration) | Every taskset and user field, with defaults. |
+| [Reproducibility](#reproducibility) | The pinned interpreter, seeds, and what makes two runs comparable. |
+| [Changes in 0.4.0 …](#changes-in-040) | Version history, newest first. |
+
+## Models named here
+
+Two model families appear throughout, as reference points and as the guide.
+Named in full once here, and by short name everywhere after.
+
+| Short name | Full model id | Role |
+|---|---|---|
+| **Nemotron** | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` | Strong reference. Never trained here — it is an instrument for measuring the *taskset*. |
+| **Qwen 4B** | `Qwen/Qwen3.5-4B` | The original training target; has since outgrown Level 1. |
+| **Qwen 2B** | `Qwen/Qwen3.5-2B` | Baselined, not trained. |
+| **Qwen 0.8B** | `Qwen/Qwen3.5-0.8B` | The current training target. |
+| **Qwen 35B-A3B** | `Qwen/Qwen3.5-35B-A3B` | The optional retry guide, not a subject of any measurement. |
+
+**Every Qwen here is a Qwen3.5**, so after this point they are written
+**Qwen *size*** — `Qwen 4B`, `Qwen 0.8B`. A bare "Qwen" with no size is
+ambiguous between four models and should be treated as an error in the text.
+"Nemotron" is unambiguous because only one is used.
+
 ## What this environment actually measures
 
 Worth knowing before you train on it. A failure taxonomy over 222 baseline
@@ -98,7 +136,11 @@ seed `20260808`. `0.1.0` is the pre-repair taskset, shown so the effect of the
 0.2.0 fixes is visible rather than asserted. Treat these as a difficulty
 ordering for two specific models, not as a property of the tasks.
 
-| family | Nemotron 0.1.0 → **0.2.0** | Qwen3.5-4B 0.1.0 → **0.2.0** | note |
+**Per-family pass rate before and after the 0.2.0 repair.** Each cell is
+`0.1.0 → `**`0.2.0`**, same tasks, same seed, same models — only the taskset
+changed. Sorted by how far the family moved for Nemotron.
+
+| family | Nemotron 0.1.0 → **0.2.0** | Qwen 4B 0.1.0 → **0.2.0** | note |
 |---|---|---|---|
 | `linsolve_tolerance` | 0.030 → **0.752** | 0.000 → **0.292** | was unrunnable as written |
 | `struct_cell_wrangle` | 0.528 → **0.736** | 0.375 → **0.389** | matrix min/max; the name is historical |
@@ -112,7 +154,7 @@ ordering for two specific models, not as a property of the tasks.
 | `sliding_window` | 0.148 → **0.213** | 0.014 → **0.190** | genuinely hard: stride semantics |
 
 Paired on 96 tasks per model, the overall change is **+0.162** (SE 0.033) for
-Nemotron and **+0.105** (SE 0.022) for Qwen. The families that moved most are
+Nemotron and **+0.105** (SE 0.022) for Qwen 4B. The families that moved most are
 the ones that were defective; `signal_identity` and `sliding_window`, which
 were diagnosed as *genuinely* hard rather than broken, barely moved for
 Nemotron — the intended outcome.
@@ -124,10 +166,10 @@ across two models and is recorded rather than explained away.
 
 **Why this matters for training.** A family no model ever passes contributes
 zero GRPO advantage at any group size. The lowest family pass rate rose from
-0.030 to 0.213 (Nemotron) and 0.000 to 0.056 (Qwen), and the fraction of
+0.030 to 0.213 (Nemotron) and 0.000 to 0.056 (Qwen 4B), and the fraction of
 unanimous — therefore gradient-free — groups at `group_size = 8` fell from
-0.500 to **0.100** on Nemotron Level 2, and from 0.759 to **0.143** on Qwen
-Level 2.
+0.500 to **0.100** on Nemotron Level 2, and from 0.759 to **0.143** on
+Qwen 4B Level 2.
 
 ## What "500 tasks" means, and what a held-out pool holds out
 
@@ -254,7 +296,7 @@ Measured on 2026-08-09 and worth knowing before you report anything from a
 multi-turn configuration.
 
 **Retries are the strongest lever in the environment.** Solve rate from one turn
-to three: Nemotron-3-Nano 0.570 → 0.828 (L1), Qwen3.5-4B 0.332 → 0.715. Gains of
+to three: Nemotron 0.570 → 0.828 (L1), Qwen 4B 0.332 → 0.715. Gains of
 +0.22 to +0.38, larger for the weaker model.
 
 **But almost none of it comes from the feedback.** A control that replaced the
@@ -289,7 +331,8 @@ runs the submitted function after each attempt and reports back:
 | 2 | hidden pass count and Octave diagnostic | 0.85 |
 | 3 | the same diagnostic plus one concise guide hint | 0.60 |
 
-The guide defaults to `Qwen/Qwen3.5-35B-A3B` through Prime Inference. It sees
+The guide defaults to Qwen 35B-A3B (`Qwen/Qwen3.5-35B-A3B`) through Prime
+Inference. It sees
 the public task prompt, the candidate source, and the first diagnostic only —
 never hidden inputs, expected values, or the reference implementation.
 Credentials are never written into traces or package configuration. Set

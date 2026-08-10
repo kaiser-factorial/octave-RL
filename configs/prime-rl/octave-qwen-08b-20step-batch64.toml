@@ -15,16 +15,16 @@
 # holdout in place. Promoted from the 2026-08-09 three-step smoke, which passed
 # with zero errors and 50-100% of groups carrying gradient.
 #
-# Why 0.8B: on the repaired taskset it scores 0.107 reward / 0.078 solve rate on
-# Level 1 in this exact scaffold, against 4B's 0.641 -- 4B has outgrown Level 1,
+# Why 0.8B: on the repaired taskset it scores 0.107 reward / 0.117 solve rate on
+# Level 1 in this exact scaffold, against 4B's 0.641 reward / 0.727 solve -- 4B has outgrown Level 1,
 # 0.8B has not. It also has the best format_ok (0.64) and least truncation
 # (2.5%) of the sizes measured, and costs a fifth of 4B to train.
 # See artifacts/smaller-models-20260809/RESULTS.md.
 #
-# Why group_size 8 is not optional here: at a 0.078 solve rate, g=4 leaves ~78%
+# Why group_size 8 is not optional here: at a 0.117 solve rate, g=4 leaves ~69%
 # of groups unanimous and therefore gradient-free. 0.8B's rollout dispersion is
-# 1.44 -- close to independent, against 4B's 2.15 -- so a bigger group buys
-# nearly what the theory predicts, taking that to roughly 0.52 at g=8.
+# 1.40 -- close to independent, against 4B's 2.30 -- so a bigger group buys
+# nearly what the theory predicts, taking that to roughly 0.37 at g=8.
 #
 # On group_size vs max_inflight_rollouts: prime-rl **enforces
 # `max_inflight_rollouts >= group_size`** and refuses to start otherwise

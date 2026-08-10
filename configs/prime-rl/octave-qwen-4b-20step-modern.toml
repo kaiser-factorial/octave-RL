@@ -1,0 +1,119 @@
+# Twenty-step training run: Qwen 4B, Level 1, batch 64 / group 8.
+#
+# Purpose: give the 2026-08-06 twenty-step Qwen 4B run something it can actually
+# be compared against. That run is incomparable to everything after it for three
+# separate reasons, and only one of them is fixable by re-running:
+#
+#   1. it trained on the pre-repair (0.1.0) taskset, where two families were
+#      unsolvable as written;
+#   2. it used the old reward protocol, where a correct first answer scored
+#      **1.1**, so its y-scale ceiling is not 1.0;
+#   3. its `zero_advantage` post-batch filter was OFF, so its "trainable" reads
+#      8/8 at every step and its mean reward is over *all* rollouts, where every
+#      later run averages only the rollouts that survived filtering.
+#
+# This run fixes all three by being a current run: repaired taskset, current
+# reward protocol, filter enforced. It does NOT reproduce the old geometry
+# (batch 8 / group 8 = 1 task per step), because that config is now known to be
+# the worst case for gradient -- with the filter on it would spend most steps
+# shipping empty batches, and would measure the filter rather than the model.
+#
+# Instead it matches `octave-qwen-08b-20step-batch64.toml` exactly except for
+# the model, so the useful comparison is 4B against 0.8B under an identical
+# scaffold. Batch 64 / group 8 = 8 tasks per step; in the 0.8B pair that took
+# fully degenerate steps from 6-of-20 down to 0-of-20.
+#
+# Expectation, stated in advance so it cannot be rationalised afterwards:
+# **Level 1 is saturated for 4B.** It solves repaired L1 at 0.727 in this exact
+# three-attempt scaffold (n=128, artifacts/smaller-models-20260809/). A group
+# whose rollouts all score 1.0 is exactly as gradient-free as one that all score
+# 0, so the trainable fraction is expected to fall as the run proceeds. That is
+# the measurement, not a failure: it quantifies how fast a saturated cell stops
+# teaching. If a rising reward with a collapsing trainable fraction is what
+# comes back, the conclusion is "L1 is finished for 4B", which is already the
+# reason training moved to 0.8B.
+#
+# HAZARD, taken knowingly. The SM89 CUDA illegal-memory failures on this host
+# class came from 7-8 simultaneous long generations of Qwen 4B specifically --
+# the exact size and concurrency this config uses (`max_inflight_rollouts = 8`).
+# The 0.8B runs were safe because 0.8B is a fifth the size. If this run dies
+# with an illegal memory access, that IS the answer; the fallback is
+# `group_size = 4` / `max_inflight_rollouts = 4`, which prime-rl allows because
+# it enforces only `max_inflight_rollouts >= group_size`.
+#
+# Cost guard: 2x RTX 6000 Ada at ~$1.50/hr. Budget roughly 1.5 h including
+# bring-up. Tear the pod down the moment step 20 lands.
+
+max_steps = 20
+seq_len = 8192
+output_dir = "training_outputs/octave-qwen-4b-20step-modern"
+clean_output_dir = true
+
+[deployment]
+type = "single_node"
+num_train_gpus = 1
+num_infer_gpus = 1
+
+[model]
+name = "Qwen/Qwen3.5-4B"
+
+[model.vlm]
+vision_encoder_attr = "model.visual"
+language_model_attr = "model.language_model"
+
+[orchestrator]
+batch_size = 64
+group_size = 8
+max_inflight_rollouts = 8
+collect_inference_metrics = false
+
+[orchestrator.renderer]
+name = "qwen3.5"
+enable_thinking = false
+
+[orchestrator.train.sampling]
+temperature = 1.0
+max_completion_tokens = 1536
+
+[[orchestrator.train.env]]
+name = "octave-level1-guided-local"
+group_size = 8
+taskset = { id = "octave-rl", families = ["logical_index", "broadcast_arith", "sliding_window", "linsolve_tolerance", "sequence_recurrence", "struct_cell_wrangle", "string_parse", "signal_identity"], level = 1, num_tasks = 500, seed = 314159, task = { octave_runtime = "local", second_attempt_multiplier = 0.85, guided_attempt_multiplier = 0.60, user = { colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B", octave_runtime = "local" } } }
+harness = { id = "null", runtime = { type = "subprocess" } }
+max_turns = 3
+max_total_tokens = 6144
+timeout = { rollout = 900, finalize = 300, scoring = 60 }
+pool = { type = "elastic", max_workers = 1, multiplex = 2 }
+
+[trainer]
+
+[trainer.model]
+impl = "custom"
+optimization_dtype = "bfloat16"
+reduce_dtype = "bfloat16"
+optim_cpu_offload = true
+
+[trainer.model.lora]
+rank = 16
+alpha = 32
+dropout = 0.0
+
+[trainer.optim]
+lr = 1e-5
+
+[trainer.ckpt.weights]
+save_adapter_separately = true
+
+[ckpt]
+interval = 5
+keep_last = 3
+
+[inference]
+gpu_memory_utilization = 0.85
+
+[inference.model]
+enforce_eager = true
+max_model_len = 6144
+
+[inference.vllm_extra]
+attention_backend = "TRITON_ATTN"
