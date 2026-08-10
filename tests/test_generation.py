@@ -113,6 +113,22 @@ def test_a_family_generates_the_same_tasks_whichever_others_are_present() -> Non
             ), f"{family} L{level} differs when generated in isolation"
 
 
+def test_every_family_is_on_the_variant_form() -> None:
+    """`VARIANT_MODULES` must stay exhaustive over `FAMILY_NAMES`.
+
+    Before 0.5.0 a family missing from this mapping fell back to a single fixed
+    prompt per level, which is the defect the variant form removes. That
+    fallback is gone -- `build_tasks` now indexes `VARIANT_MODULES` directly, so
+    a missing family raises rather than degrading quietly -- but a family added
+    to `FAMILY_NAMES` without a module would fail at generation time rather than
+    here, which is a worse place to find out.
+    """
+    assert sorted(VARIANT_MODULES) == sorted(FAMILY_NAMES)
+    for name in FAMILY_NAMES:
+        keys = VARIANT_MODULES[name].VARIANT_KEYS
+        assert len(keys) == len(set(keys)) == 8, f"{name}: {keys}"
+
+
 def test_unknown_family_names_are_rejected() -> None:
     with pytest.raises(ValueError, match="unknown task families"):
         build_tasks(1, 5, 0, families=["reduce_along_dim", "nonexistent_family"])
