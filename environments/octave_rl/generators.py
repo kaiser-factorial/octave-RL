@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 from families import broadcast_arith as _broadcast_arith_variants
+from families import linsolve_tolerance as _linsolve_tolerance_variants
 from families import logical_index as _logical_index_variants
 from families import reduce_along_dim as _reduce_along_dim_variants
 from families import reshape_permute as _reshape_permute_variants
@@ -36,6 +37,7 @@ VARIANT_MODULES: dict[str, Any] = {
     "string_parse": _string_parse_variants,
     "reshape_permute": _reshape_permute_variants,
     "signal_identity": _signal_identity_variants,
+    "linsolve_tolerance": _linsolve_tolerance_variants,
 }
 
 

@@ -12,7 +12,7 @@ Two dimensions, per ``PARAMETERIZATION_DESIGN.md``: the **order** of the
 recurrence and what is **returned** from its terms, with every coefficient
 arriving as an argument rather than baked into the prompt. The design lists
 ``order in {1, 2}`` and ``return in {terms, cumulative sum, final term}``, which
-is six; the eighth and seventh come from a fourth return mode, **the total**
+is six; the seventh and eighth come from a fourth return mode, **the total**
 (the sum of all n terms). It is a scalar like ``final`` but it reads the whole
 sequence rather than its last element, so a solution that finds a shortcut to
 ``x(n)`` cannot also answer it. The full cross ships: 2 orders x 4 returns.
@@ -52,13 +52,14 @@ so **12,690 is the ceiling for the whole family** (attained at ``n=9``,
 2,000-task census per variant reaches exactly that number, so the bound is tight
 rather than generous. Every value is an integer produced by integer additions
 and multiplications; doubles represent every integer up to ``2^53 ~ 9.0e15``
-exactly, eleven orders of magnitude above the ceiling, so both sides of every
-comparison are bit-identical and the ``1e-9`` relative tolerance is **never**
-exercised -- no case here can be decided by a floating-point disagreement
-between NumPy and Octave. Allowing ``n = 10`` would raise the ceiling to 34,702
-and ``n = 11`` to 94,847; both are still exact, and both were passed over
-because the extra length buys nothing the fourth return mode does not already
-buy.
+exactly, nearly twelve orders of magnitude above the ceiling, so both sides of
+every comparison are bit-identical and the ``1e-9`` relative tolerance is
+**never** exercised -- no case here can be decided by a floating-point
+disagreement between NumPy and Octave. Allowing ``n = 10`` would raise the
+ceiling to 34,702 and ``n = 11`` to 94,847; both are still exact, and both were
+passed over because nothing in the task needs a longer sequence, while a smaller
+ceiling keeps the exactness argument obvious to the next reader instead of
+merely true.
 
 ``p`` and ``q`` exclude **0** on purpose. ``q = 0`` turns an order-2 recurrence
 into an order-1 one, and ``p = 0`` makes order 1 constant from its second term:
@@ -68,8 +69,10 @@ case, and neither degeneracy is anything the prompt describes.
 ``n >= 7`` is stated in the prompt *and* enforced in the draws. It does two
 jobs. It disposes of the edge the brief names -- "the first 1 term" of a
 two-term recurrence would need a convention for what happens when ``n`` is
-smaller than the number of seeds, and no prompt here states one -- and it is
-also what makes the level ladder collapse-free; see below.
+smaller than the number of seeds, and no prompt here states one -- and it
+excludes the only two parameter tuples at which the level ladder collapses,
+which sit at ``n = 5`` and ``n = 6``. The lower bound is 7 rather than 3 for
+that second reason; see the ladder section.
 
 ## The level ladder
 
@@ -196,10 +199,10 @@ agree on every hidden case.
 
 GNU Octave 10.2.0 from the pinned rootfs, network namespace obtained, through
 ``executors.execute_candidate_locally`` -- the scoring path the taskset uses.
-8 variants x 3 levels x 5 seeds x 6 hidden cases = 720 cases per solution:
+8 variants x 3 levels x 7 seeds x 6 hidden cases = 1,008 cases per solution:
 
-- ``reference``: **720/720**, every (variant, level, seed) at fraction 1.0.
-- ``natural``:   **720/720**, same. No variant here needs a coercion, a
+- ``reference``: **1008/1008**, every (variant, level, seed) at fraction 1.0.
+- ``natural``:   **1008/1008**, same. No variant here needs a coercion, a
   reshape or a transpose to pass, which is the condition for shipping it.
 
 Non-vacuity was established with two deliberately wrong solutions rather than
@@ -207,16 +210,29 @@ one, and the second is why:
 
 - **wrong seed values** (order 2 drives ``filter`` with ``b`` instead of
   ``b - p*a``; order 1 gets the sign of ``p`` in the transfer function wrong;
-  the loop forms get ``-p*x(i-1)``): fails everywhere -- worst score over 120
-  runs is 0.500 of a task's cases, full marks **0 of 120**.
+  the loop forms get ``-p*x(i-1)``): fails every one of the 24 (variant, level)
+  cells -- best score over 168 runs is 0.500 of a task's six cases, full marks
+  **0 of 168**.
 - **seed one index late** (a leading zero in the ``filter`` drive, or the loop
-  seeded at index 2): fails 22 of the 24 (variant, level) cells, and **scores
-  full marks on ``order2-final`` and ``order2-total`` at level 3**. That is not
+  seeded at index 2): fails 22 of the 24 cells, and **scores full marks on
+  ``order2-final`` and ``order2-total`` at level 3**, 7 seeds of 7. That is not
   a hole in the task: prepending a zero to the drive shifts the whole sequence
   one place without changing any of its values, so ``x(end)`` and ``sum(x)`` are
   genuinely unchanged and the mutant is a correct program for those two return
   modes. It is recorded because a single-probe non-vacuity check would have read
-  as a failure of the task rather than of the probe.
+  as a defect of the task rather than of the probe -- and because it is the
+  reason the first probe alone is not sufficient evidence for those two cells.
+
+**Not yet wired up.** This module is not in ``generators.VARIANT_MODULES``, so
+nothing in the repository builds a task from it yet and no repo test sees it:
+the numbers above were produced by driving ``build`` and
+``execute_candidate_locally`` directly. The change that registers it must also
+delete the ``sequence_recurrence`` entry from ``LEGACY_NATURAL`` in
+``scripts/validate_natural_solutions.py`` -- a converted family that keeps a
+legacy entry is what the validator's ``stale_legacy_entries`` line exists to
+catch -- and can leave ``"sequence_recurrence"`` where it already is in
+``test_generation.same_task_at_level_three``, which is now true of this family
+in a way the 0.4.x text only approximately was.
 """
 
 from __future__ import annotations

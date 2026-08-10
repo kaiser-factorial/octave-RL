@@ -30,6 +30,57 @@ entry is worth having.
 
 ---
 
+## 2026-08-10 — A graded output element that was always zero, for weeks
+
+**Symptom.** `linsolve_tolerance` level 3 asks for `[x; norm(A*x-b)]`. The
+generator draws `b = A @ x0`, so `b` lies in the range of `A` **by
+construction** and the least-squares residual is zero to machine precision.
+Measured over 200 draws at the generator's own seed: the largest residual
+element is **1.33e-14**, against the task's tolerance of **1e-7**. One of the
+graded numbers was a constant, and a model could hardcode it.
+
+**Root cause.** Two independently reasonable choices that interact badly.
+Drawing `b` from a known `x0` guarantees a consistent system, which is what you
+want for a *solve* task. Grading the residual is what makes a *tolerance* task.
+Together they grade a quantity the draw has already forced to zero.
+
+**Blast radius.** Every `linsolve_tolerance` level-3 number ever reported. The
+family sat at a 0.030 pass rate, so this made a hard task marginally easier
+rather than inflating anything visible -- one sixth of the graded output was
+free. No headline claim rests on it, and no other family is affected. The
+0.5.0 variant form does not have it: `b` is now drawn independently of `A`, and
+over-determined residual norms run 0.037 to 3.66.
+
+**Why it survived.** Every check this repository runs asks whether a solution
+*passes*. Both the reference and the naive solution compute the residual
+correctly, get zero, and match — so all three validators are green, and the
+naive-solution validator that catches undisclosed conventions is equally blind
+here, because there is no convention involved. Nothing asked the question that
+finds it: **does any graded output element take the same value on every case?**
+That is a property of the task, not of any solution, and no test looked at it.
+
+`scripts/audit_constant_outputs.py` exists and asks a neighbouring question --
+whether a whole task is constant-solvable, defined as all six expected outputs
+being exactly identical. It reported 0 tasks across the pool, correctly, because
+only one *element* of the vector is constant, not the whole output.
+
+**Fix.** Not fixed in 0.4.x, which is frozen; superseded by the 0.5.0 variant
+form for this family. Found while converting it, by an author asked to justify
+the tolerance rather than inherit it.
+
+**Verification.** 200 draws at seed 314159 through the 0.4.x generator: maximum
+residual element 1.33e-14, i.e. `< 1e-7` on every case. In 0.5.0, residual norms
+over the same number of draws span 0.037 to 3.66.
+
+**Residual risk.** The general question remains unasked by any test: **per
+element** of a graded output, does its value vary across a task's six hidden
+cases? `audit_constant_outputs.py` should be extended from whole-output to
+per-element before the next family is authored, because the variant form
+multiplies the surface eightfold and this defect is invisible to everything else
+the repository runs.
+
+---
+
 ## 2026-08-10 — A level-2 prompt whose answer equalled its level 1, in the file that warns about it
 
 **Symptom.** `reduce_along_dim`, the worked exemplar for the 0.5.0 variant form,

@@ -106,17 +106,12 @@ LEGACY_VARIANT = "(legacy)"  # legacy path: one problem per level, by definition
 # It survives only because the conversion is staged across sessions and this
 # validator is the only check that has ever caught the undisclosed-convention
 # defect; dropping a family's coverage while it waits its turn would open exactly
-# the hole this file exists to close. Eight families are converted and their
+# the hole this file exists to close. Nine families are converted and their
 # entries are gone. Delete each family's entry in the same change that converts
 # it; the `stale_legacy_entries` line flags it if you forget. When the last one
 # goes, this table is empty, the `legacy` path is obviously dead, and both
 # should be removed outright.
 LEGACY_NATURAL: dict[str, dict[int, str]] = {
-    "linsolve_tolerance": {
-        1: "out = A \\ b;",
-        2: "out = A \\ b;",
-        3: "x = A \\ b; out = [x; norm(A*x - b)];",
-    },
     "sequence_recurrence": {
         1: "out = a + d * (0:n-1);",
         2: "out = zeros(1, n); out(1:2) = [a b];\n"
