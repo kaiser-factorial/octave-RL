@@ -1,142 +1,1473 @@
 {
-  "definition": "A task is constant-solvable only if all six precomputed expected outputs are exactly identical.",
+  "definition": {
+    "whole_constant": "all six expected outputs of a task are identical, so one constant answer passes every hidden case",
+    "frozen_position": "a position in the flattened graded output takes the same value on all six cases, within the task's own tolerance, so a model can hardcode that position and be graded only on the rest"
+  },
   "seed": 0,
+  "num_tasks_per_level": 500,
+  "flagged": [],
   "levels": {
     "1": {
       "tasks": 500,
       "constant_solvable_tasks": 0,
-      "by_family": {
-        "broadcast_arith": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+      "frozen_positions": 11,
+      "graded_positions": 6734,
+      "by_cell": {
+        "broadcast_arith:absolute-difference": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 56
         },
-        "linsolve_tolerance": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:difference": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 82
         },
-        "logical_index": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:max": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
         },
-        "reduce_along_dim": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:min": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
         },
-        "reshape_permute": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:product": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 80
         },
-        "sequence_recurrence": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:squared-difference": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
         },
-        "signal_identity": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:sum": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 96
         },
-        "sliding_window": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:sum-of-squares": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
         },
-        "string_parse": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "linsolve_tolerance:multirhs-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 76
         },
-        "struct_cell_wrangle": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "linsolve_tolerance:multirhs-square": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 80
+        },
+        "linsolve_tolerance:multirhsresidual-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 12
+        },
+        "linsolve_tolerance:residualnorm-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "linsolve_tolerance:residualvector-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
+        },
+        "linsolve_tolerance:solution-overdetermined": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 44
+        },
+        "linsolve_tolerance:solution-square": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 42
+        },
+        "linsolve_tolerance:solutionresidual-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 50
+        },
+        "logical_index:even-extract": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 40
+        },
+        "logical_index:even-nan": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 4,
+          "positions": 120
+        },
+        "logical_index:magnitude-extract": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 34
+        },
+        "logical_index:magnitude-zero": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 1,
+          "positions": 124
+        },
+        "logical_index:negative-extract": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 56
+        },
+        "logical_index:outside-clamp": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 120
+        },
+        "logical_index:outside-nan": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 6,
+          "positions": 126
+        },
+        "logical_index:positive-extract": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 50
+        },
+        "reduce_along_dim:max-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "reduce_along_dim:mean-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "reduce_along_dim:mean-rows": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 32
+        },
+        "reduce_along_dim:median-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "reduce_along_dim:median-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "reduce_along_dim:min-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "reduce_along_dim:range-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "reduce_along_dim:sum-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "reshape_permute:perm132-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 300
+        },
+        "reshape_permute:perm213-column": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 348
+        },
+        "reshape_permute:perm213-row": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 348
+        },
+        "reshape_permute:perm231-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 288
+        },
+        "reshape_permute:perm231-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 356
+        },
+        "reshape_permute:perm312-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 300
+        },
+        "reshape_permute:perm312-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 300
+        },
+        "reshape_permute:perm321-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 300
+        },
+        "sequence_recurrence:order1-cumulative": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 98
+        },
+        "sequence_recurrence:order1-final": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order1-terms": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 102
+        },
+        "sequence_recurrence:order1-total": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order2-cumulative": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 84
+        },
+        "sequence_recurrence:order2-final": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order2-terms": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 88
+        },
+        "sequence_recurrence:order2-total": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "signal_identity:autocorr-circular": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 66
+        },
+        "signal_identity:autocorr-linear": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 70
+        },
+        "signal_identity:conv-circular": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 60
+        },
+        "signal_identity:conv-linear": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 92
+        },
+        "signal_identity:shift-backward": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
+        },
+        "signal_identity:shift-forward": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 78
+        },
+        "signal_identity:xcorr-forward": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 62
+        },
+        "signal_identity:xcorr-reversed": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
+        },
+        "sliding_window:max-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "sliding_window:mean-stride1": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
+        },
+        "sliding_window:mean-strided": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 30
+        },
+        "sliding_window:median-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 54
+        },
+        "sliding_window:median-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "sliding_window:min-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 56
+        },
+        "sliding_window:range-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "sliding_window:sum-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 48
+        },
+        "string_parse:comma-decimals-column": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 44
+        },
+        "string_parse:comma-integers-row": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 46
+        },
+        "string_parse:mixed-decimals-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 38
+        },
+        "string_parse:mixed-integers-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 38
+        },
+        "string_parse:semicolon-decimals-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 38
+        },
+        "string_parse:semicolon-integers-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 42
+        },
+        "string_parse:space-decimals-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 48
+        },
+        "string_parse:space-integers-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 42
+        },
+        "struct_cell_wrangle:meanstd-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 88
+        },
+        "struct_cell_wrangle:meanstd-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
+        },
+        "struct_cell_wrangle:minmax-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 92
+        },
+        "struct_cell_wrangle:minmax-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 76
+        },
+        "struct_cell_wrangle:minmedmax-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 120
+        },
+        "struct_cell_wrangle:minmedmax-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 108
+        },
+        "struct_cell_wrangle:sumcount-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 80
+        },
+        "struct_cell_wrangle:sumcount-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 80
         }
       }
     },
     "2": {
       "tasks": 500,
       "constant_solvable_tasks": 0,
-      "by_family": {
-        "broadcast_arith": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+      "frozen_positions": 6,
+      "graded_positions": 6591,
+      "by_cell": {
+        "broadcast_arith:absolute-difference": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
         },
-        "linsolve_tolerance": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:difference": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
         },
-        "logical_index": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:max": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 76
         },
-        "reduce_along_dim": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:min": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 100
         },
-        "reshape_permute": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:product": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
         },
-        "sequence_recurrence": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:squared-difference": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
         },
-        "signal_identity": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:sum": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 90
         },
-        "sliding_window": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:sum-of-squares": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 68
         },
-        "string_parse": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "linsolve_tolerance:multirhs-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
         },
-        "struct_cell_wrangle": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "linsolve_tolerance:multirhs-square": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
+        },
+        "linsolve_tolerance:multirhsresidual-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 12
+        },
+        "linsolve_tolerance:residualnorm-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "linsolve_tolerance:residualvector-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 68
+        },
+        "linsolve_tolerance:solution-overdetermined": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 42
+        },
+        "linsolve_tolerance:solution-square": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 42
+        },
+        "linsolve_tolerance:solutionresidual-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 48
+        },
+        "logical_index:even-extract": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 38
+        },
+        "logical_index:even-nan": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 1,
+          "positions": 122
+        },
+        "logical_index:magnitude-extract": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 40
+        },
+        "logical_index:magnitude-zero": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 1,
+          "positions": 120
+        },
+        "logical_index:negative-extract": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 58
+        },
+        "logical_index:outside-clamp": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 122
+        },
+        "logical_index:outside-nan": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 4,
+          "positions": 124
+        },
+        "logical_index:positive-extract": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 54
+        },
+        "reduce_along_dim:max-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "reduce_along_dim:mean-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "reduce_along_dim:mean-rows": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "reduce_along_dim:median-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "reduce_along_dim:median-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "reduce_along_dim:min-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "reduce_along_dim:range-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "reduce_along_dim:sum-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "reshape_permute:perm132-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 288
+        },
+        "reshape_permute:perm213-column": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 348
+        },
+        "reshape_permute:perm213-row": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 380
+        },
+        "reshape_permute:perm231-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 300
+        },
+        "reshape_permute:perm231-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 356
+        },
+        "reshape_permute:perm312-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 300
+        },
+        "reshape_permute:perm312-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 288
+        },
+        "reshape_permute:perm321-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 288
+        },
+        "sequence_recurrence:order1-cumulative": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 98
+        },
+        "sequence_recurrence:order1-final": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order1-terms": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 98
+        },
+        "sequence_recurrence:order1-total": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order2-cumulative": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 90
+        },
+        "sequence_recurrence:order2-final": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order2-terms": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 78
+        },
+        "sequence_recurrence:order2-total": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "signal_identity:autocorr-circular": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
+        },
+        "signal_identity:autocorr-linear": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 60
+        },
+        "signal_identity:conv-circular": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
+        },
+        "signal_identity:conv-linear": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 100
+        },
+        "signal_identity:shift-backward": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 74
+        },
+        "signal_identity:shift-forward": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 82
+        },
+        "signal_identity:xcorr-forward": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 60
+        },
+        "signal_identity:xcorr-reversed": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 62
+        },
+        "sliding_window:max-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "sliding_window:mean-stride1": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 62
+        },
+        "sliding_window:mean-strided": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 32
+        },
+        "sliding_window:median-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 48
+        },
+        "sliding_window:median-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "sliding_window:min-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 56
+        },
+        "sliding_window:range-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "sliding_window:sum-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 54
+        },
+        "string_parse:comma-decimals-column": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "string_parse:comma-integers-row": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 34
+        },
+        "string_parse:mixed-decimals-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "string_parse:mixed-integers-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "string_parse:semicolon-decimals-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "string_parse:semicolon-integers-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "string_parse:space-decimals-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 23
+        },
+        "string_parse:space-integers-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "struct_cell_wrangle:meanstd-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 84
+        },
+        "struct_cell_wrangle:meanstd-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 80
+        },
+        "struct_cell_wrangle:minmax-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 84
+        },
+        "struct_cell_wrangle:minmax-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 76
+        },
+        "struct_cell_wrangle:minmedmax-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 114
+        },
+        "struct_cell_wrangle:minmedmax-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 108
+        },
+        "struct_cell_wrangle:sumcount-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 80
+        },
+        "struct_cell_wrangle:sumcount-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 76
         }
       }
     },
     "3": {
       "tasks": 500,
       "constant_solvable_tasks": 0,
-      "by_family": {
-        "broadcast_arith": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+      "frozen_positions": 6,
+      "graded_positions": 6591,
+      "by_cell": {
+        "broadcast_arith:absolute-difference": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
         },
-        "linsolve_tolerance": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:difference": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
         },
-        "logical_index": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:max": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 76
         },
-        "reduce_along_dim": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:min": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 100
         },
-        "reshape_permute": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:product": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
         },
-        "sequence_recurrence": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:squared-difference": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
         },
-        "signal_identity": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:sum": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 90
         },
-        "sliding_window": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "broadcast_arith:sum-of-squares": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 68
         },
-        "string_parse": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "linsolve_tolerance:multirhs-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
         },
-        "struct_cell_wrangle": {
-          "tasks": 50,
-          "constant_solvable_tasks": 0
+        "linsolve_tolerance:multirhs-square": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 72
+        },
+        "linsolve_tolerance:multirhsresidual-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 12
+        },
+        "linsolve_tolerance:residualnorm-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "linsolve_tolerance:residualvector-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 68
+        },
+        "linsolve_tolerance:solution-overdetermined": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 42
+        },
+        "linsolve_tolerance:solution-square": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 42
+        },
+        "linsolve_tolerance:solutionresidual-overdetermined": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 48
+        },
+        "logical_index:even-extract": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 38
+        },
+        "logical_index:even-nan": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 1,
+          "positions": 122
+        },
+        "logical_index:magnitude-extract": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 40
+        },
+        "logical_index:magnitude-zero": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 1,
+          "positions": 120
+        },
+        "logical_index:negative-extract": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 58
+        },
+        "logical_index:outside-clamp": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 122
+        },
+        "logical_index:outside-nan": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 4,
+          "positions": 124
+        },
+        "logical_index:positive-extract": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 54
+        },
+        "reduce_along_dim:max-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "reduce_along_dim:mean-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "reduce_along_dim:mean-rows": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "reduce_along_dim:median-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "reduce_along_dim:median-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "reduce_along_dim:min-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "reduce_along_dim:range-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "reduce_along_dim:sum-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "reshape_permute:perm132-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 288
+        },
+        "reshape_permute:perm213-column": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 348
+        },
+        "reshape_permute:perm213-row": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 380
+        },
+        "reshape_permute:perm231-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 300
+        },
+        "reshape_permute:perm231-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 356
+        },
+        "reshape_permute:perm312-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 300
+        },
+        "reshape_permute:perm312-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 288
+        },
+        "reshape_permute:perm321-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 288
+        },
+        "sequence_recurrence:order1-cumulative": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 98
+        },
+        "sequence_recurrence:order1-final": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order1-terms": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 98
+        },
+        "sequence_recurrence:order1-total": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order2-cumulative": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 90
+        },
+        "sequence_recurrence:order2-final": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "sequence_recurrence:order2-terms": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 78
+        },
+        "sequence_recurrence:order2-total": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 6
+        },
+        "signal_identity:autocorr-circular": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
+        },
+        "signal_identity:autocorr-linear": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 60
+        },
+        "signal_identity:conv-circular": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 64
+        },
+        "signal_identity:conv-linear": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 100
+        },
+        "signal_identity:shift-backward": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 74
+        },
+        "signal_identity:shift-forward": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 82
+        },
+        "signal_identity:xcorr-forward": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 60
+        },
+        "signal_identity:xcorr-reversed": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 62
+        },
+        "sliding_window:max-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "sliding_window:mean-stride1": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 62
+        },
+        "sliding_window:mean-strided": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 32
+        },
+        "sliding_window:median-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 48
+        },
+        "sliding_window:median-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "sliding_window:min-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 56
+        },
+        "sliding_window:range-strided": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "sliding_window:sum-stride1": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 54
+        },
+        "string_parse:comma-decimals-column": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 28
+        },
+        "string_parse:comma-integers-row": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 34
+        },
+        "string_parse:mixed-decimals-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "string_parse:mixed-integers-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "string_parse:semicolon-decimals-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "string_parse:semicolon-integers-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 26
+        },
+        "string_parse:space-decimals-column": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 23
+        },
+        "string_parse:space-integers-row": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 24
+        },
+        "struct_cell_wrangle:meanstd-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 84
+        },
+        "struct_cell_wrangle:meanstd-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 80
+        },
+        "struct_cell_wrangle:minmax-columns": {
+          "tasks": 7,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 84
+        },
+        "struct_cell_wrangle:minmax-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 76
+        },
+        "struct_cell_wrangle:minmedmax-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 114
+        },
+        "struct_cell_wrangle:minmedmax-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 108
+        },
+        "struct_cell_wrangle:sumcount-columns": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 80
+        },
+        "struct_cell_wrangle:sumcount-rows": {
+          "tasks": 6,
+          "whole_constant": 0,
+          "frozen": 0,
+          "positions": 76
         }
       }
     }
