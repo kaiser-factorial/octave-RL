@@ -4,34 +4,35 @@ A seeded GNU Octave coding curriculum for native `verifiers.v1`. Every task is
 a function signature plus a natural-language spec; scoring runs the submitted
 function against six hidden NumPy-derived cases on a pinned Octave interpreter
 and awards the fraction that pass. No judge model, no partial credit for
-looking plausible, and nothing the candidate prints can set its own score.
+looking plausible, and the pass count is computed host-side from values the
+candidate process never receives, so printing cannot raise a score.
 
 The task pool is generated rather than scraped, so it cannot leak from a public
 benchmark and its hidden test cases are unbounded. It is **not** an unbounded
-supply of distinct problems — see "What '500 tasks' means" below before
-reporting a number.
+supply of distinct problems — see "500 tasks, 30 distinct questions" below
+before reporting a number.
 
 ## Contents
 
 | Section | In one line |
 |---|---|
-| [Models named here](#models-named-here) | The full slugs behind "Nemotron" and "Qwen *size*", fixed once so no number is ambiguous. |
-| [What this environment actually measures](#what-this-environment-actually-measures) | A failure taxonomy: this is a language-fluency benchmark far more than a reasoning one. |
+| [Model naming conventions](#model-naming-conventions) | The full slugs behind "Nemotron" and "Qwen XB" referenced throughout. |
 | [Quickstart](#quickstart) | Install, and the two lines that load the environment. |
-| [Choosing a runtime](#choosing-a-runtime) | Where candidate code executes — Prime Sandbox, local subprocess, or a pinned rootfs — and when each is honest. |
+| [Where candidate code runs](#where-candidate-code-runs) | Prime Sandbox against a local subprocess, how to pin the interpreter, and which to use for numbers you report. |
+| &nbsp;&nbsp;&rarr; [What the candidate interpreter can and cannot see](#what-the-candidate-interpreter-can-and-cannot-see) | Hidden values, pass counters and the network all sit outside the candidate process. |
+| [This tests language fluency more than reasoning](#this-tests-language-fluency-more-than-reasoning) | A failure taxonomy over 222 baseline rollouts, ranked by how often each competency is the one that fails. |
 | [Families, levels, and difficulty](#families-levels-and-difficulty) | The ten task families, what each one exercises, and measured per-family pass rates. |
-| [What "500 tasks" means](#what-500-tasks-means-and-what-a-held-out-pool-holds-out) | The pool carries 30 distinct prompts; a held-out seed holds out inputs, not questions. |
-| [→ Holding out a family](#holding-out-a-family-gives-you-a-real-one) | The `families` field, and the train / validation / test split it makes possible. |
+| [500 tasks, 30 distinct questions](#500-tasks-30-distinct-questions) | Why a seed-disjoint pool holds out test inputs but not questions, and what that costs a reported score. |
+| &nbsp;&nbsp;&rarr; [Train/Val/Test](#trainvaltest) | How to configure splits with the `families` field. |
 | [Reward](#reward) | Fraction of hidden cases passed, the attempt discount, and the diagnostic metrics reported alongside. |
 | [Output shape is graded](#output-shape-is-graded) | Orientation counts, every prompt states the shape it will be compared against, and why. |
-| [What a multi-turn score means](#what-a-multi-turn-score-means) | Most of the gap between a 1-turn and a 3-turn number is resampling, not capability. |
 | [Multi-turn and the optional guide](#multi-turn-and-the-optional-guide) | The retry loop, the LLM guide, the discount table, and the credential the guide needs on disk. |
-| [Scoring boundary](#scoring-boundary) | What the interpreter running candidate code can and cannot see. |
+| [A multi-turn score is mostly resampling](#a-multi-turn-score-is-mostly-resampling) | The measured split between the extra attempt, the feedback text, and the guide. |
 | [Configuration](#configuration) | Every taskset and user field, with defaults. |
 | [Reproducibility](#reproducibility) | The pinned interpreter, seeds, and what makes two runs comparable. |
 | [Changes in 0.4.0 …](#changes-in-040) | Version history, newest first. |
 
-## Models named here
+## Model naming conventions
 
 Two model families appear throughout, as reference points and as the guide.
 Named in full once here, and by short name everywhere after.
@@ -49,21 +50,6 @@ Named in full once here, and by short name everywhere after.
 ambiguous between four models and should be treated as an error in the text.
 "Nemotron" is unambiguous because only one is used.
 
-## What this environment actually measures
-
-Worth knowing before you train on it. A failure taxonomy over 222 baseline
-rollouts put the competencies in this order:
-
-1. **can the model emit runnable Octave at all** — ~36% of rollouts fail here;
-2. **does it follow Octave's shape and orientation conventions** — ~5%;
-3. **does it obey the prompt's stated constraints** (e.g. no loops) — ~4%;
-4. **is the algorithm correct** — ~3%.
-
-This is a language-fluency and convention-compliance benchmark far more than a
-mathematical-reasoning one. That makes it a good RL substrate — the reward is
-deterministic, cheap, and unhackable — but a result obtained here is a result
-about learning a language's surface conventions. Read it that way.
-
 ## Quickstart
 
 ```bash
@@ -79,7 +65,7 @@ env = vf.load_environment("octave-rl", level=1, num_tasks=200, seed=0)
 Candidate code has to run somewhere. Pick a runtime before you evaluate — see
 below; the default reaches for Prime Sandboxes.
 
-## Choosing a runtime
+## Where candidate code runs
 
 | `octave_runtime` | Where candidate code runs | Use for |
 | --- | --- | --- |
@@ -114,6 +100,45 @@ docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w \
   gnuoctave/octave:10.2.0 <your command>
 ```
 
+### What the candidate interpreter can and cannot see
+
+The candidate sandbox receives only the candidate function, a generated
+input-only runner, and the hidden *inputs*. It serialises each result's shape
+and flattened values into a terminal `__OCTAVE_CANDIDATE_RESULT__<token>`
+record carrying a token minted after generation. The trusted Python process
+keeps expected outputs and pass counters entirely outside that sandbox,
+validates the record, and applies the shape and tolerance comparison itself.
+
+Candidate stdout therefore cannot set a score: printing a plausible result
+record fails the token check, and the counters it would need to forge are never
+in its process. Scoring does not use exit status. The in-Octave comparison
+harness and its `__OCTAVE_HARNESS_RESULT__` protocol exist only in the separate
+reference-pool validator, where the executed function is repository-owned.
+
+`TaskData.image`, workdir, and container resources are deliberately unset: the
+outer harness and user simulator run in their worker subprocesses, and only
+candidate execution creates the pinned Octave Sandbox. This avoids a duplicate
+container without weakening the boundary.
+
+## This tests language fluency more than reasoning
+
+Worth knowing before you train on it. A failure taxonomy over 222 baseline
+rollouts put the competencies in this order:
+
+1. **can the model emit runnable Octave at all** — ~36% of rollouts fail here;
+2. **does it follow Octave's shape and orientation conventions** — ~5%;
+3. **does it obey the prompt's stated constraints** (e.g. no loops) — ~4%;
+4. **is the algorithm correct** — ~3%.
+
+This is a language-fluency and convention-compliance benchmark far more than a
+mathematical-reasoning one. That makes it a good RL substrate: the reward is
+deterministic, costs a few milliseconds, and is computed from hidden values the
+candidate never sees, which removes the usual reward-hacking surface. It does
+not make the reward unhackable — a family whose hidden cases are satisfiable by
+a degenerate answer would still be gamed, which is what
+`scripts/validate_natural_solutions.py` exists to catch. A result obtained here
+is a result about learning a language's surface conventions.
+
 ## Families, levels, and difficulty
 
 Ten families cover reductions, logical indexing, reshape/permutation, broadcast
@@ -131,47 +156,33 @@ three times in four. If you are choosing a training mix, choose it on family
 composition and target families near p = 0.5, where sampled groups carry the
 most GRPO advantage. Do not choose it on level alone.
 
-Pass rates at T=1.0, 72–96 rollouts per family, thinking off, single turn,
-seed `20260808`. `0.1.0` is the pre-repair taskset, shown so the effect of the
-0.2.0 fixes is visible rather than asserted. Treat these as a difficulty
-ordering for two specific models, not as a property of the tasks.
+Pass rates at T=1.0, 72-96 rollouts per family, thinking off, single turn,
+seed `20260808`, on the current taskset. Treat these as a difficulty ordering
+for two specific models, not as a property of the tasks. What these numbers
+were before the 0.2.0 repair, and how far each family moved, is in
+"Changes in 0.2.0".
 
-**Per-family pass rate before and after the 0.2.0 repair.** Each cell is
-`0.1.0 → `**`0.2.0`**, same tasks, same seed, same models — only the taskset
-changed. Sorted by how far the family moved for Nemotron.
-
-| family | Nemotron 0.1.0 → **0.2.0** | Qwen 4B 0.1.0 → **0.2.0** | note |
-|---|---|---|---|
-| `linsolve_tolerance` | 0.030 → **0.752** | 0.000 → **0.292** | was unrunnable as written |
-| `struct_cell_wrangle` | 0.528 → **0.736** | 0.375 → **0.389** | matrix min/max; the name is historical |
-| `logical_index` | 0.734 → **0.639** | 0.398 → **0.312** | the only family that fell |
-| `sequence_recurrence` | 0.417 → **0.574** | 0.058 → **0.366** | |
-| `reshape_permute` | 0.306 → **0.569** | 0.236 → **0.292** | prompt described a different signature |
-| `broadcast_arith` | 0.236 → **0.458** | 0.014 → **0.083** | was unrunnable as written |
-| `reduce_along_dim` | 0.351 → **0.389** | 0.137 → **0.326** | |
-| `string_parse` | 0.264 → **0.366** | 0.032 → **0.056** | |
-| `signal_identity` | 0.174 → **0.234** | 0.044 → **0.086** | genuinely hard: FFT circular autocorrelation |
-| `sliding_window` | 0.148 → **0.213** | 0.014 → **0.190** | genuinely hard: stride semantics |
-
-Paired on 96 tasks per model, the overall change is **+0.162** (SE 0.033) for
-Nemotron and **+0.105** (SE 0.022) for Qwen 4B. The families that moved most are
-the ones that were defective; `signal_identity` and `sliding_window`, which
-were diagnosed as *genuinely* hard rather than broken, barely moved for
-Nemotron — the intended outcome.
-
-`logical_index` fell in both models. Neither drop is individually significant
-(|t| = 1.61 and 1.38) and the only change to that family was moving its
-row-vector requirement onto the generated shape line, but the direction agrees
-across two models and is recorded rather than explained away.
+| family | Nemotron | Qwen 4B | note |
+|---|---:|---:|---|
+| `linsolve_tolerance` | 0.752 | 0.292 | |
+| `struct_cell_wrangle` | 0.736 | 0.389 | matrix min/max; the name is historical |
+| `logical_index` | 0.639 | 0.312 | |
+| `sequence_recurrence` | 0.574 | 0.366 | |
+| `reshape_permute` | 0.569 | 0.292 | |
+| `broadcast_arith` | 0.458 | 0.083 | |
+| `reduce_along_dim` | 0.389 | 0.326 | |
+| `string_parse` | 0.366 | 0.056 | |
+| `signal_identity` | 0.234 | 0.086 | FFT circular autocorrelation |
+| `sliding_window` | 0.213 | 0.190 | stride semantics |
 
 **Why this matters for training.** A family no model ever passes contributes
-zero GRPO advantage at any group size. The lowest family pass rate rose from
-0.030 to 0.213 (Nemotron) and 0.000 to 0.056 (Qwen 4B), and the fraction of
-unanimous — therefore gradient-free — groups at `group_size = 8` fell from
-0.500 to **0.100** on Nemotron Level 2, and from 0.759 to **0.143** on
-Qwen 4B Level 2.
+zero GRPO advantage at any group size, so a taskset with a dead family wastes
+part of every rollout budget spent on it. Every family here is reachable: the
+lowest pass rate is **0.213** (Nemotron) and **0.056** (Qwen 4B). At
+`group_size = 8`, unanimous — therefore gradient-free — groups run at **0.100**
+on Nemotron Level 2 and **0.143** on Qwen 4B Level 2.
 
-## What "500 tasks" means, and what a held-out pool holds out
+## 500 tasks, 30 distinct questions
 
 Read this before reporting a number from this environment.
 
@@ -197,7 +208,7 @@ benchmark. Two consequences:
   seed-disjoint evaluation will not detect that. It shows up as a high score
   with no transfer.
 
-### Holding out a family gives you a real one
+### Train/Val/Test
 
 Set `families` to exclude some. Because prompts are determined by
 (family, level), excluding a family is the only way to obtain a problem the
@@ -290,36 +301,6 @@ vector as a column — so the natural solution is conformant as written.
 by running a deliberately naive solution per family and level and requiring it
 to pass.
 
-## What a multi-turn score means
-
-Measured on 2026-08-09 and worth knowing before you report anything from a
-multi-turn configuration.
-
-**Retries are the strongest lever in the environment.** Solve rate from one turn
-to three: Nemotron 0.570 → 0.828 (L1), Qwen 4B 0.332 → 0.715. Gains of
-+0.22 to +0.38, larger for the weaker model.
-
-**But almost none of it comes from the feedback.** A control that replaced the
-whole diagnostic with the sentence "That answer was not correct." kept
-**79–95%** of the gain; the informative version beat it by +0.031/+0.016/+0.008,
-none distinguishable from zero. Two-turn solve also lands *below* independent
-resampling (0.688 against the 0.815 that `1−(1−p)²` predicts), which is what
-correlated attempts look like.
-
-So **the multi-turn scaffold is approximately correlated best-of-N sampling**
-with a small informational bonus. The one component with a measured effect is
-the LLM guide — a specific diagnosis of the actual bug — worth **+0.062 at
-Level 1** (t = 2.37) on top of the extra attempt.
-
-Two rules follow:
-
-- **Always state the turn budget with a score.** A 3-turn number is not
-  comparable to a 1-turn number, and most of the gap is resampling.
-- **Measure with `raw_case_fraction`, not the reward.** `case_fraction`
-  multiplies correctness by an attempt discount (0.85 on attempt 2, 0.60 on
-  attempt 3), so thresholding it cannot count a success after the first attempt.
-  The two coincide only at one turn.
-
 ## Multi-turn and the optional guide
 
 `max_turns` maps to the persistent user's attempt budget. The user simulator
@@ -359,25 +340,35 @@ Credentials are never written into traces or package configuration. Set
 > rollouts — but it is still misconfigured, and the hints are what attempt 3 is
 > for.
 
-## Scoring boundary
+## A multi-turn score is mostly resampling
 
-The candidate sandbox receives only the candidate function, a generated
-input-only runner, and the hidden *inputs*. It serialises each result's shape
-and flattened values into a terminal `__OCTAVE_CANDIDATE_RESULT__<token>`
-record carrying a token minted after generation. The trusted Python process
-keeps expected outputs and pass counters entirely outside that sandbox,
-validates the record, and applies the shape and tolerance comparison itself.
+Measured on 2026-08-09 and worth knowing before you report anything from a
+multi-turn configuration.
 
-Candidate stdout therefore cannot set a score: printing a plausible result
-record fails the token check, and the counters it would need to forge are never
-in its process. Scoring does not use exit status. The in-Octave comparison
-harness and its `__OCTAVE_HARNESS_RESULT__` protocol exist only in the separate
-reference-pool validator, where the executed function is repository-owned.
+**Retries are the strongest lever in the environment.** Solve rate from one turn
+to three: Nemotron 0.570 → 0.828 (L1), Qwen 4B 0.332 → 0.715. Gains of
++0.22 to +0.38, larger for the weaker model.
 
-`TaskData.image`, workdir, and container resources are deliberately unset: the
-outer harness and user simulator run in their worker subprocesses, and only
-candidate execution creates the pinned Octave Sandbox. This avoids a duplicate
-container without weakening the boundary.
+**But almost none of it comes from the feedback.** A control that replaced the
+whole diagnostic with the sentence "That answer was not correct." kept
+**79–95%** of the gain; the informative version beat it by +0.031/+0.016/+0.008,
+none distinguishable from zero. Two-turn solve also lands *below* independent
+resampling (0.688 against the 0.815 that `1−(1−p)²` predicts), which is what
+correlated attempts look like.
+
+So **the multi-turn scaffold is approximately correlated best-of-N sampling**
+with a small informational bonus. The one component with a measured effect is
+the LLM guide — a specific diagnosis of the actual bug — worth **+0.062 at
+Level 1** (t = 2.37) on top of the extra attempt.
+
+Two rules follow:
+
+- **Always state the turn budget with a score.** A 3-turn number is not
+  comparable to a 1-turn number, and most of the gap is resampling.
+- **Measure with `raw_case_fraction`, not the reward.** `case_fraction`
+  multiplies correctness by an attempt discount (0.85 on attempt 2, 0.60 on
+  attempt 3), so thresholding it cannot count a success after the first attempt.
+  The two coincide only at one turn.
 
 ## Configuration
 
@@ -427,7 +418,7 @@ point. It is native `verifiers.v1` throughout and does not mix in the legacy v0
   with no execution error, where the hint is the only thing that can help.
 - The attempt discount follows the hint rather than the attempt number: a hinted
   solve is priced at `guided_attempt_multiplier` whenever the hint arrived.
-- No score change is expected from any of this; see "What a multi-turn score
+- No score change is expected from any of this; see "A multi-turn score is mostly resampling"
   means".
 
 ## Changes in 0.3.1
