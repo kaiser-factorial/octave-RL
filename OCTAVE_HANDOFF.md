@@ -803,10 +803,21 @@ generated-config behavior, tests, and documentation.
 ### Published to the Environments Hub
 
 `kaiser-factorial/octave-rl` **0.2.2**, Hub build/test Action **SUCCESS**,
-visibility still **PRIVATE**. `prime env push --visibility` applies only when
-the environment is first created, so flipping it public is a dashboard action,
-not a CLI one. The Hub username was set during the first push and, per Prime,
-can only be chosen once.
+visibility **PRIVATE** at the time. The Hub username was set during the first
+push and, per Prime, can only be chosen once.
+
+**Correction, 2026-08-10.** An earlier version of this paragraph said
+`prime env push --visibility` applies only at creation and that flipping an
+existing environment public is a dashboard action. That is wrong. The flag does
+work on a later push -- it just does not take effect immediately. Pushing 0.4.1
+with `--visibility PUBLIC` still reported `PRIVATE` on a status check moments
+later, which is what produced the false conclusion; the same flag on 0.4.2 came
+back **PUBLIC**. Read visibility after the Action settles, not straight after
+the push, and do not conclude a flag is inert from one immediate re-read.
+`prime env` has no separate visibility command, which is what made the wrong
+explanation plausible.
+
+The environment is **PUBLIC** as of 0.4.2.
 
 Verified from the consumer side, not just the repository: a fresh sandbox that
 had never seen this project pulled the environment, installed it as a package,

@@ -30,6 +30,38 @@ entry is worth having.
 
 ---
 
+## 2026-08-10 — A flag called inert after one immediate re-read
+
+**Symptom.** `prime env push --visibility PUBLIC` on 0.4.1, then
+`prime env status` moments later: `Visibility: PRIVATE`. Concluded the flag
+applies only at environment creation, checked that `prime env -h` and
+`prime env version -h` expose no visibility command, and recorded in the
+handoff that flipping an existing environment public is a dashboard action.
+
+**Root cause of the wrong claim.** The flag works. It just does not take effect
+synchronously with the push. The same flag on 0.4.2 reported **PUBLIC** once the
+Hub Action had settled. The 0.4.1 read happened while the Action was still
+running.
+
+**Blast radius.** No measurement. One wrong paragraph in `OCTAVE_HANDOFF.md`,
+one wrong note in commit cd173b1's message, and a false blocker reported to the
+user -- "I cannot do this from the CLI, you have to use the dashboard" -- which
+would have cost them a manual step they did not need.
+
+**Why it survived.** The wrong explanation was *corroborated* by a true fact:
+there genuinely is no `prime env visibility` command. Finding supporting
+evidence for a hypothesis felt like confirming it, when all it confirmed was
+that the CLI surface is small. A single immediate re-read was treated as
+decisive about an asynchronous system.
+
+**Practice.** Read state after the job that changes it reports terminal, not
+straight after the request that starts it. When a flag appears to do nothing,
+distinguish "rejected", "ignored" and "not yet applied" before writing any of
+them down -- and be more suspicious of a diagnosis that arrives with convenient
+corroboration.
+
+---
+
 ## 2026-08-09 — "Zero infrastructure errors" was read off the wrong column
 
 **Symptom.** The handoff recorded that both 20-step runs completed with zero
