@@ -8,9 +8,11 @@ looking plausible, and the pass count is computed host-side from values the
 candidate process never receives, so printing cannot raise a score.
 
 The task pool is generated rather than scraped, so it cannot leak from a public
-benchmark and its hidden test cases are unbounded. It is **not** an unbounded
-supply of distinct problems — see "500 tasks: Questions vs Prompts" below
-before reporting a number.
+benchmark and its hidden test cases are unbounded. Ten families times eight
+variants times three levels gives **240 distinct prompts**; it is still not an
+unbounded supply of distinct problems, and a seed split holds out test inputs
+rather than questions — see "500 tasks: Questions vs Prompts" before reporting a
+number.
 
 ## Contents
 
@@ -22,8 +24,8 @@ before reporting a number.
 | &nbsp;&nbsp;&rarr; [Scoring boundary](#scoring-boundary) | What the interpreter running candidate code can and cannot see. |
 | [What this actually tests](#what-this-actually-tests) | A failure taxonomy: this is a language-fluency benchmark far more than a reasoning one. |
 | [Families, levels, and difficulty](#families-levels-and-difficulty) | The ten task families, what each one exercises, and measured per-family pass rates. |
-| [500 tasks: Questions vs Prompts](#500-tasks-questions-vs-prompts) | The pool carries 30 distinct prompts; a held-out seed holds out inputs, not questions. |
-| &nbsp;&nbsp;&rarr; [Train/Val/Test](#trainvaltest) | How to configure splits with the `families` field. |
+| [500 tasks: Questions vs Prompts](#500-tasks-questions-vs-prompts) | The pool carries 240 distinct prompts; a held-out seed still holds out inputs, not questions. |
+| &nbsp;&nbsp;&rarr; [Two ways to hold out a problem](#two-ways-to-hold-out-a-problem) | The `families` and `variants` fields, and which question each answers. |
 | [Reward](#reward) | Fraction of hidden cases passed, the attempt discount, and the diagnostic metrics reported alongside. |
 | [Output shape is graded](#output-shape-is-graded) | Orientation counts, every prompt states the shape it will be compared against, and why. |
 | [Multi-turn and the optional guide](#multi-turn-and-the-optional-guide) | The retry loop, the LLM guide, the discount table, and the credential the guide needs on disk. |
@@ -186,54 +188,85 @@ on Nemotron Level 2 and **0.143** on Qwen 4B Level 2.
 
 Read this before reporting a number from this environment.
 
-A prompt is built from the signature plus the family/level description. It
-carries **nothing task-specific** — no sizes, no values. So all 50
-`sequence_recurrence` level-1 tasks in a pool share a byte-identical prompt,
-and a 1,500-task pool contains about **30 distinct problems**, one per
-family/level cell. What varies between tasks in a cell is only the six hidden
-test cases.
+A prompt is the signature plus a **variant** description plus a generated shape
+sentence. A variant is a named choice — which statistic, which axis, which
+operator — that changes what the function must compute, not merely which numbers
+test it. Each of the ten families declares **eight**, rendered at three levels,
+for **240 distinct prompts**.
 
-Pools are separated by seed, and by task the separation is exact — training
-seed `0` and held-out seed `20260808` share 0 of 1,500 tasks. But they share
-**30 of 30 prompts**. What is held out is the hidden test *inputs*, not the
-question.
+**Before 0.5.0 that number was 30**, one per (family, level), and every task in a
+cell shared a byte-identical prompt. That is the largest change in this
+environment's history, and no measurement taken before it is comparable at task
+or family level.
 
-That makes this a genuine generalization test over inputs — the model never
-sees a hidden case, so no answer can leak — but **not** a held-out-problem
-benchmark. Two consequences:
+### What a seed still does not do
 
-- `num_tasks = 500` is 500 test-suite draws over 30 problems, not 500 problems.
-  Every score is in-distribution on the problem.
-- RL on this environment can drive toward memorising 30 function bodies, and a
-  seed-disjoint evaluation will not detect that. It shows up as a high score
-  with no transfer.
+Pools are separated by seed, and by task the separation is exact — training seed
+`0` and held-out seed `20260808` share 0 of 1,500 tasks. **They still share all
+240 prompts.**
 
-### Train/Val/Test
+That is not a defect and no variant count fixes it: with eight variants and about
+fifty tasks per family, every variant appears in every 500-task pool with
+probability ≈ 0.999, so two seeds contain the same prompt set whatever the
+selection rule. A seed holds out hidden test *inputs*, never the question.
 
-Set `families` to exclude some. Because prompts are determined by
-(family, level), excluding a family is the only way to obtain a problem the
-policy has genuinely never seen:
+So `num_tasks = 500` is 500 test-suite draws over 240 problems rather than 30 —
+much better, and still in-distribution on the problem. **To hold out a problem,
+use one of the two fields below**, and quote generalization from those rather
+than from a seed split.
+
+### Two ways to hold out a problem
+
+| field | costs | holds out | use when |
+|---|---|---|---|
+| `families` | a fifth of training coverage | whole families — an unpracticed problem *type* | testing transfer to an idiom never trained |
+| `variants` | nothing; every family stays in training | a quarter of the problems, inside families the model trains on | testing whether a practiced idiom generalizes across its parameters |
+
+**The variant holdout is the stricter test and the cheaper one**, and it exists
+only because prompts are parameterised. Names are `"family:key"`:
 
 ```toml
 [taskset]
-families = ["logical_index", "broadcast_arith", "sliding_window", "linsolve_tolerance",
-            "sequence_recurrence", "struct_cell_wrangle", "string_parse", "signal_identity"]
+variants = ["reduce_along_dim:mean-rows", "reduce_along_dim:median-columns"]
 ```
 
-`DEFAULT_HELDOUT_FAMILIES` is `["reduce_along_dim", "reshape_permute"]`, and
-`training_families()` returns the complement. Both sit mid-difficulty for both
-measured models, so neither is floored nor ceilinged; `reduce_along_dim` has a
-near neighbour that stays in training (`struct_cell_wrangle` level 2+ is also a
-column-wise reduction) so it tests transfer of a practiced idiom, while
-`reshape_permute` has none. It is a default, not a recommendation — hold out
-the two hardest families and a real gain hides against the floor.
+`DEFAULT_HELDOUT_VARIANTS` holds out two per family;
+`specs.complement(declared_variants(), DEFAULT_HELDOUT_VARIANTS)` returns the
+trained remainder. It is **frozen**, and chosen from measurement rather than
+position: variants are ranked by measured solve rate, the middle half of each
+family's range is kept so the test sits on neither floor nor ceiling, and the
+pair differing in the most spec components is taken so the test crosses a
+family's dimensions instead of running along one.
 
-Filtering *selects from* the full ten-family stream rather than cycling over
-your selection, so a family's k-th task is byte-identical whichever others are
-present. A train split and a holdout split drawn from one seed are therefore
-disjoint **and** each individually comparable to a full-pool measurement.
-Task ids come from the full stream, so they are stable but not contiguous
-within a filtered pool.
+| family | held out |
+|---|---|
+| `broadcast_arith` | `product`, `min` |
+| `linsolve_tolerance` | `solutionresidual-overdetermined`, `residualvector-overdetermined` |
+| `logical_index` | `even-extract`, `magnitude-zero` |
+| `reduce_along_dim` | `mean-columns`, `range-columns` |
+| `reshape_permute` | `perm213-row`, `perm312-column` |
+| `sequence_recurrence` | `order1-total`, `order2-terms` |
+| `signal_identity` | `shift-forward`, `autocorr-linear` |
+| `sliding_window` | `mean-stride1`, `range-strided` |
+| `string_parse` | `semicolon-integers-column`, `mixed-decimals-row` |
+| `struct_cell_wrangle` | `sumcount-columns`, `minmedmax-rows` |
+
+Changing this list changes what "held out" means in any published number, so
+treat a change as a version bump rather than a tweak.
+
+The family holdout is unchanged: `DEFAULT_HELDOUT_FAMILIES` is
+`["reduce_along_dim", "reshape_permute"]` and `training_families()` returns the
+complement. Both sit mid-difficulty, so neither is floored nor ceilinged;
+`reduce_along_dim` has a near neighbour that stays in training
+(`struct_cell_wrangle` is also a column-wise reduction) so it tests transfer of a
+practiced idiom, while `reshape_permute` has none.
+
+Both filters *select from* the full ten-family stream rather than cycling over
+your selection, so a family's k-th task is byte-identical whichever families and
+whichever variants are present. A train split and a holdout split drawn from one
+seed are therefore disjoint **and** each individually comparable to a full-pool
+measurement. Task ids come from the full stream, so they are stable but not
+contiguous within a filtered pool.
 
 **Use three splits, and do not blend them.**
 
@@ -372,15 +405,19 @@ Two rules follow:
 
 ## Configuration
 
-`level`, `num_tasks`, `seed`, and `require_vectorized` are typed Taskset config
-fields; `octave_runtime`, `max_attempts` and `guide_enabled` are task and user
-fields.
+`level`, `num_tasks`, `seed`, `require_vectorized`, `families` and `variants`
+are typed Taskset config fields; `octave_runtime`, `max_attempts` and
+`guide_enabled` are task and user fields.
 
 ```toml
 [taskset]
 level = 2
 num_tasks = 256
 seed = 20260808
+# Both holdout fields default to None, meaning "everything". See
+# "Two ways to hold out a problem" before setting either.
+families = ["logical_index", "broadcast_arith"]          # whole families
+variants = ["reduce_along_dim:mean-rows"]                # "family:key" pairs
 
 [taskset.task]
 octave_runtime = "local"
@@ -403,6 +440,41 @@ point. It is native `verifiers.v1` throughout and does not mix in the legacy v0
 - Verifiers: `>=0.2.1,<0.3` · NumPy: `>=2.0,<3`
 - Each task is fully determined by `(level, seed, task index)`.
 - Six hidden cases per task, generated with NumPy and stored with the task.
+
+## Changes in 0.5.0
+
+**Breaking change to task semantics. No measurement taken before this version is
+comparable at task or family level.**
+
+- **Parameterised descriptions.** Each family declares eight **variants** — a
+  named choice of statistic, axis or operator that changes what the function must
+  compute. The pool goes from **30 distinct prompts to 240**. Prompt, reference
+  and naive solution are written together from one definition per variant, so
+  they cannot drift.
+- **A variant holdout**, `variants`, alongside the family holdout. It holds out
+  problems inside families the model still trains on, so it costs no training
+  coverage. `DEFAULT_HELDOUT_VARIANTS` is frozen and chosen from measured
+  per-variant solve rates.
+- **`solved`**, an undiscounted 0/1 metric, so solve rate never has to be
+  recovered by thresholding a reward that is discounted by attempt.
+- **`validate_natural_solutions.py` checks per variant.** It previously held one
+  naive solution per (family, level), which would have covered one variant of
+  eight and reported PASS for the other seven.
+- **`audit_constant_outputs.py` checks per element**, within tolerance and
+  anchored from both ends of variable-length outputs. It previously asked only
+  whether a whole output was constant, and therefore could not see a single
+  graded position that never varies — which 0.4.x `linsolve_tolerance` level 3
+  had, at 1.33e-14 against a 1e-7 tolerance.
+- **`reshape_permute` prompts tightened** after measurement showed they induced
+  runaway generation: 25–61% of rollouts hit the completion cap against 0–11%
+  elsewhere. The disambiguation that prevents the inverse permutation reading is
+  unchanged and was re-verified.
+- The ten pre-variant generator functions and the `DESCRIPTIONS` table are
+  **deleted** rather than left beside the live code.
+
+Gates on this pool, on the pinned Octave 10.2.0: naive solution **9,000/9,000**
+with every variant checked by its own, reference path **9,000/9,000**, and no
+level-1 variant near zero for both Qwen3.5-4B and Nemotron.
 
 ## Changes in 0.4.1 and 0.4.2
 
