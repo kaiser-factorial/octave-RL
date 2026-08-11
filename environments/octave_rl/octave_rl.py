@@ -38,6 +38,21 @@ shell commands. The function name and signature must exactly match the prompt.""
 # ``executors``. Scoring, rewards, and the hidden-value boundary are identical.
 OctaveRuntime = Literal["prime", "local"]
 
+# How correctness becomes reward.
+#
+# "case_fraction" pays the share of hidden cases that passed, so a function that
+# runs and is right about a third of the inputs is worth 0.333.
+# "solved_only" pays 1.0 for a fully correct answer and 0.0 for everything else:
+# no credit for code that merely runs, or runs and is partly right.
+#
+# The environment has never had an execution or structured-output bonus -- that
+# was removed in the 2026-08-05 hardening -- so partial case credit is the only
+# channel through which a wrong answer can be worth anything, and this is the
+# knob that closes it. Both modes leave every metric untouched:
+# ``execution_fraction``, ``correct_given_executed`` and ``raw_case_fraction``
+# still report what the code did, they just stop paying for it.
+RewardMode = Literal["case_fraction", "solved_only"]
+
 
 def attempt_multiplier(
     *,
@@ -419,6 +434,11 @@ class OctaveTaskConfig(vf.TaskConfig):
     second_attempt_multiplier: float = 0.85
     guided_attempt_multiplier: float = 0.60
     octave_runtime: OctaveRuntime = "prime"
+    # Default stays "case_fraction" so every historical run remains reproducible
+    # from its own config. A run that sets "solved_only" is an ablation and is
+    # not reward-comparable with one that does not; compare the two through
+    # `raw_case_fraction`, which means the same thing in both.
+    reward_mode: RewardMode = "case_fraction"
 
 
 class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
@@ -459,6 +479,8 @@ class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
     @vf.reward(weight=1.0)
     async def case_fraction(self, trace: vf.Trace) -> float:
         raw = float(trace.info["octave"]["fraction"])
+        if self.config.reward_mode == "solved_only":
+            raw = float(raw == 1.0)
         return raw * attempt_multiplier(
             attempts=max(1, trace.state.attempts),
             second_attempt_multiplier=self.config.second_attempt_multiplier,
@@ -603,6 +625,9 @@ def load_environment(
     runtime: OctaveRuntime = str(kwargs.pop("octave_runtime", "prime"))  # type: ignore[assignment]
     if runtime not in ("prime", "local"):
         raise ValueError("octave_runtime must be 'prime' or 'local'")
+    reward_mode: RewardMode = str(kwargs.pop("reward_mode", "case_fraction"))  # type: ignore[assignment]
+    if reward_mode not in ("case_fraction", "solved_only"):
+        raise ValueError("reward_mode must be 'case_fraction' or 'solved_only'")
     user_config = OctaveUserConfig(
         max_attempts=max_turns,
         guide_enabled=bool(kwargs.pop("guide_enabled", False)),
@@ -619,6 +644,7 @@ def load_environment(
             kwargs.pop("guided_attempt_multiplier", 0.60)
         ),
         octave_runtime=runtime,
+        reward_mode=reward_mode,
     )
     if kwargs:
         unknown = ", ".join(sorted(kwargs))

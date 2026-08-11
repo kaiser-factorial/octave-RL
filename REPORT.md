@@ -55,7 +55,7 @@ inputs, without allowing candidate stdout to supply a score.
 | Cases per task | 6 |
 | Default tasks per level | 500 |
 | Sandbox limits | 1 CPU, 2 GB memory, 5 GB disk |
-| Correctness reward | fraction of hidden cases passed |
+| Correctness reward | fraction of hidden cases passed (`reward_mode = "case_fraction"`), or 1.0 only when all pass (`"solved_only"`) |
 | Execution shaping | none; only hidden-case correctness is rewarded |
 | Retry multipliers | 1.00 / 0.85 / 0.60 |
 
@@ -64,6 +64,12 @@ as `solved`. The optimized reward is correctness times the attempt multiplier:
 `1.00`, `0.85`, or `0.60`. There is deliberately no executable-program or
 structured-output bonus because candidate code controls its own process output.
 
+
+Per-case partial credit is therefore the last channel through which an answer
+that is not fully correct can be worth anything. `reward_mode = "solved_only"`
+(default off) closes it, so reward becomes strictly "right answer or nothing".
+Metrics are unaffected in either mode; reward columns from the two modes are not
+comparable.
 
 Runs recorded before this protocol hardening used an execution bonus. Compare
 historical and future model capability only through `raw_case_fraction`, not

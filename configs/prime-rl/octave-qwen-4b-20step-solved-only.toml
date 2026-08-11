@@ -1,0 +1,153 @@
+# ABLATION -- solved_only reward. Qwen3.5-4B, Level 1, batch 16 / group 8.
+#
+# ON HOLD as of 2026-08-10: parameterisation (0.5.0) takes priority, and shipping
+# it invalidates every 0.4.x control including this arm's. Do not launch this
+# before the pool question is settled -- see PARAMETERIZATION_DESIGN.md.
+#
+# Batch 16 here, against the 0.8B arm's 64: the "batch 64 for the small Qwens"
+# rule is about degenerate all-FAIL groups at a low solve rate. 4B is saturated
+# on Level 1 instead (solve 0.727), so its degenerate groups are unanimous
+# all-PASS and a bigger batch does not address them. Level 2 would; see below.
+#
+# Paired with `octave-qwen-4b-20step-batch16.toml`, the 4B rung of the ladder.
+# The ONLY difference is `reward_mode = "solved_only"` in the taskset's `task`
+# table.
+#
+# CONFIRM THE CONTROL EXISTS BEFORE TREATING THIS AS PAIRED. No 20-step artifact
+# for the 4B rung is committed under `artifacts/training/`, and no entry in
+# OCTAVE_HANDOFF.md or PIPELINE_LOG.md reports its per-step table -- only the
+# 0.8B batch-16 / batch-64 pair is written up. If the 4B rung's logs cannot be
+# produced, this arm needs its own control run at the same settings, which
+# doubles its cost.
+#
+# What the flag changes: a fully correct answer is worth 1.0 and everything else
+# is worth 0.0, still discounted 0.85 / 0.60 by attempt. Per-case partial credit
+# is the only channel through which an incorrect answer could earn anything --
+# there has been no execution or structured-output bonus since the 2026-08-05
+# hardening -- so this makes the reward strictly "right answer or nothing".
+#
+# Expected size of the change: small. On the 2026-07-29 distribution, 5 of 200
+# rollouts were partially correct and carried about 6% of total reward mass.
+# Read the outcome from `solved` and `raw_case_fraction`, NEVER from reward: the
+# two arms define reward differently, so their reward columns are not comparable
+# by construction. `execution_fraction` and `correct_given_executed` are still
+# reported, so the thing being un-rewarded is still measured.
+#
+# READ THIS BEFORE BUDGETING THE RUN. 4B is saturated on Level 1 (solve 0.727),
+# so its degenerate groups are already unanimous all-PASS, and removing partial
+# credit only removes spread from the FAIL side. This arm therefore has the
+# weakest prior of the three: the flag can only act on groups where nobody
+# solved the task, which is the minority case for this model. If the question is
+# "does removing partial credit change what 4B learns", Level 2 is the honest
+# place to ask it -- at the cost of no longer pairing with the ladder rung, and
+# needing its own control run. Left at Level 1 for the pairing; see the session
+# note in OCTAVE_HANDOFF.md.
+#
+# Everything below is the control config unchanged, except `output_dir` and the
+# added `reward_mode`.
+#
+# Twenty-step training run: Qwen 4B, Level 1, batch 16 / group 8.
+#
+# One rung of a three-model ladder. `octave-qwen-08b-20step.toml` already ran
+# this exact geometry on Qwen 0.8B; this file changes the model and NOTHING
+# else, so 0.8B / 2B / 4B become directly comparable at identical settings.
+# That comparability is the whole point -- a batch-64 run would be a better
+# training config in isolation but would not line up with what already exists.
+#
+# Known property of this geometry, expected rather than discovered: batch 16 /
+# group 8 gives **2 tasks per optimizer step**, and a step ships nothing at all
+# when every sampled group comes back unanimous. On 0.8B that cost 6 of 20
+# steps. Expect degeneracy here too, and expect it to arrive from opposite
+# directions by model:
+#
+#   - Qwen 0.8B / 2B, low solve rate -> unanimous all-FAIL groups;
+#   - THIS run: 4B is saturated on Level 1 (solve 0.727), so its unanimous
+#     groups will be all-PASS instead.
+#
+# Same zero gradient, opposite cause. The empty-batch count is the measurement.
+#
+# The reward reported on an empty step is 0.0000 as an artefact of an empty
+# batch, not a measured score -- exclude those steps before averaging.
+#
+# HAZARD for the 4B rung: the SM89 CUDA illegal-memory failures came from 7-8
+# simultaneous long generations of Qwen 4B, which is what
+# `max_inflight_rollouts = 8` produces. If the run dies with an illegal memory
+# access, that IS the answer; fall back to group_size 4 / max_inflight 4.
+#
+# Cost guard: 2x RTX 6000 Ada at ~$1.50/hr. The 0.8B rung took 43 min of
+# stepping (1.9 min/step). Budget ~1 h for 2B and ~1.7 h for 4B, and stop the
+# run rather than overrun the session cap.
+
+max_steps = 20
+seq_len = 8192
+output_dir = "training_outputs/octave-qwen-4b-20step-solved-only"
+clean_output_dir = true
+
+[deployment]
+type = "single_node"
+num_train_gpus = 1
+num_infer_gpus = 1
+
+[model]
+name = "Qwen/Qwen3.5-4B"
+
+[model.vlm]
+vision_encoder_attr = "model.visual"
+language_model_attr = "model.language_model"
+
+[orchestrator]
+batch_size = 16
+group_size = 8
+max_inflight_rollouts = 8
+collect_inference_metrics = false
+
+[orchestrator.renderer]
+name = "qwen3.5"
+enable_thinking = false
+
+[orchestrator.train.sampling]
+temperature = 1.0
+max_completion_tokens = 1536
+
+[[orchestrator.train.env]]
+name = "octave-level1-guided-local"
+group_size = 8
+taskset = { id = "octave-rl", families = ["logical_index", "broadcast_arith", "sliding_window", "linsolve_tolerance", "sequence_recurrence", "struct_cell_wrangle", "string_parse", "signal_identity"], level = 1, num_tasks = 500, seed = 314159, task = { octave_runtime = "local", reward_mode = "solved_only", second_attempt_multiplier = 0.85, guided_attempt_multiplier = 0.60, user = { colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B", octave_runtime = "local" } } }
+harness = { id = "null", runtime = { type = "subprocess" } }
+max_turns = 3
+max_total_tokens = 6144
+timeout = { rollout = 900, finalize = 300, scoring = 60 }
+pool = { type = "elastic", max_workers = 1, multiplex = 2 }
+
+[trainer]
+
+[trainer.model]
+impl = "custom"
+optimization_dtype = "bfloat16"
+reduce_dtype = "bfloat16"
+optim_cpu_offload = true
+
+[trainer.model.lora]
+rank = 16
+alpha = 32
+dropout = 0.0
+
+[trainer.optim]
+lr = 1e-5
+
+[trainer.ckpt.weights]
+save_adapter_separately = true
+
+[ckpt]
+interval = 5
+keep_last = 3
+
+[inference]
+gpu_memory_utilization = 0.85
+
+[inference.model]
+enforce_eager = true
+max_model_len = 6144
+
+[inference.vllm_extra]
+attention_backend = "TRITON_ATTN"
