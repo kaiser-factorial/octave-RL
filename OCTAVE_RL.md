@@ -204,6 +204,14 @@ with more, tar locally, upload one archive, and untar in the container.
 Each family is a Python generator with difficulty knobs. Target **8–12 families**; that plus
 parameter variation yields thousands of tasks.
 
+> **This brief was met only at 0.5.0, and the gap is worth knowing about.** The
+> shipped 0.4.x generators varied *hidden inputs* per task but not the question,
+> so ten families times three levels produced exactly 30 distinct prompts and
+> "parameter variation yields thousands of tasks" was true of tasks and false of
+> problems. The difficulty knobs this table describes -- which statistic, which
+> dim, which permutation -- became real in the variant form, where each family
+> declares eight. See `PARAMETERIZATION_DESIGN.md`.
+
 | Family | Task shape | Difficulty knobs |
 |---|---|---|
 | `reduce_along_dim` | k-th largest / n-th moment / trimmed mean per column | matrix size, `k`, which dim, ties |

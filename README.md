@@ -36,13 +36,16 @@ The environment uses `verifiers.v1` throughout. It does not use the legacy v0
 
 ## Results at a glance
 
-> **Every number in this section predates 2026-08-09** and was measured on a
-> task pool with three known defects: two families whose natural solution could
-> not run, one whose prompt described a different signature, and two level-3
-> descriptions that had dropped their task definition. The environment is at
-> `0.2.0`; these are `0.1.0` measurements. They are left unrevised because they
-> are what was measured. See [PIPELINE_LOG.md](PIPELINE_LOG.md) for what each
-> defect did and [OCTAVE_HANDOFF.md](OCTAVE_HANDOFF.md) for what still holds.
+> **Every number in this section is historical and none of it is comparable with
+> the current pool.** These are `0.1.0` measurements; the environment is at
+> `0.5.0`. They were taken on a task pool with three known defects — two families
+> whose natural solution could not run, one whose prompt described a different
+> signature, and two level-3 descriptions that had dropped their task definition —
+> and then parameterisation replaced 30 distinct prompts with 240, which is a
+> breaking change to task semantics. They are left unrevised because they are what
+> was measured. See the current figures below, [PIPELINE_LOG.md](PIPELINE_LOG.md)
+> for what each defect did, and [OCTAVE_HANDOFF.md](OCTAVE_HANDOFF.md) for what
+> still holds.
 
 Small calibration runs selected `Qwen/Qwen3.5-4B`: it was the first tested
 Qwen size with nonzero reward and landed in the desired 10–35% one-turn
@@ -66,6 +69,27 @@ correctness over separate 24-task Level 1 checkpoints, then automatically
 shifted from 100% Level 1 to an 80% Level 1 / 20% Level 2 mix.
 
 ![Rollout accuracy, latency, retries, and truncation](artifacts/curriculum/live-2026-07-30/rollout-dynamics.png)
+
+### Current pool, current numbers
+
+Single-turn, no guide, T=1.0, 480 tasks per level, standard errors across tasks,
+scored against the pinned Octave 10.2.0. This is base-model difficulty on the
+0.5.0 pool, not a trained result.
+
+| model | Level 1 | Level 2 | Level 3 |
+|---|---:|---:|---:|
+| Qwen3.5-4B | **0.327 ± 0.013** | 0.289 ± 0.013 | 0.167 ± 0.011 |
+| Qwen3.5-2B | 0.052 ± 0.006 | 0.033 ± 0.005 | 0.026 ± 0.004 |
+| Qwen3.5-0.8B | 0.010 ± 0.002 | 0.005 ± 0.002 | 0.003 ± 0.001 |
+
+Qwen3.5-4B sits inside the 10–35% band the training loop wants, where on the old
+pool it was above it. The smaller sizes are below the floor: a reward signal
+cannot be built on a model that solves 1% of tasks.
+
+**A multi-turn score is not this number.** Training runs three attempts with a
+guide, which was worth 3–4x on the old pool, so quote the turn budget with any
+figure. Read solve rate from the `solved` metric or `raw_case_fraction`, never
+from the reward, which is discounted by attempt.
 
 See [REPORT.md](REPORT.md) for the full experiment analysis and
 [OCTAVE_HANDOFF.md](OCTAVE_HANDOFF.md) for current limitations and next steps.
@@ -257,7 +281,7 @@ budget.** Retries are worth +0.22 to +0.38 solve rate, but a control shows
 score is mostly resampling.
 
 The `solved` metric reports the same thing as a 0/1 per rollout, undiscounted
-and independent of `reward_mode`, so solve rate never has to be recovered by
+and independent of the turn budget, so solve rate never has to be recovered by
 thresholding a reward again.
 
 ## Reward: correctness only
@@ -465,11 +489,17 @@ trace-ingestion commands.
 | Path | Purpose |
 | --- | --- |
 | `environments/octave_rl/` | Native v1 taskset, generators, Octave harness, and package metadata |
+| `environments/octave_rl/specs.py` | The variant contract: one definition produces description, reference, and naive solution |
+| `environments/octave_rl/families/` | Ten family modules, eight variants each — the authoritative statement of what a task asks |
 | `configs/eval/` | Base-model and held-out evaluation configurations |
 | `configs/prime-rl/` | Validated native training and inference configurations |
 | `scripts/curriculum_controller.py` | Checkpointed difficulty scheduler and held-out gates |
 | `scripts/validate_reference_pool.py` | Exhaustive reference validation in Prime Sandboxes |
 | `scripts/validate_local_runtime.py` | Same pool through the reward path, no Prime usage |
+| `scripts/validate_natural_solutions.py` | Does the *obvious* solution pass? The only check that catches an undisclosed convention |
+| `scripts/audit_constant_outputs.py` | Graded output positions that never vary, per element and within tolerance |
+| `scripts/eval_hosted.py` | Evaluate a hosted model with no GPU; scoring stays local |
+| `scripts/variant_breakdown.py` | Per-variant pass rates — whether a prompt is legible, not merely satisfiable |
 | `scripts/fetch_pinned_octave.py` | Unpack the pinned Octave image without a Docker daemon |
 | `PIPELINE_LOG.md` | Defects found in the pipeline, blast radius, and why each survived |
 | `scripts/plot_*.py` | Reproducible calibration, reward, training, and timing figures |

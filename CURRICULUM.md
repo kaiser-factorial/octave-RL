@@ -48,6 +48,32 @@ demotes stages in which it is the working set. Evaluations collected before a
 transition cannot be reused to satisfy the next stage's consecutive-evaluation
 requirement.
 
+### These thresholds predate 0.5.0 and need re-tuning
+
+**They were chosen against a level ladder that no longer exists.** Every gate
+above assumes Level 1 sits well above Level 2, so that clearing one stage is
+evidence about readiness for the next. Parameterisation flattened that.
+Qwen3.5-4B, single-turn, 480 tasks per level:
+
+| pool | L1 | L2 | L3 | L2 as a share of L1 |
+|---|---:|---:|---:|---:|
+| 0.4.x | 0.400 | 0.214 | 0.118 | **54%** |
+| 0.5.0 | 0.327 | 0.289 | 0.167 | **88%** |
+
+Level 1 came down and Levels 2 and 3 came up: the old pool had a cliff between
+Levels 1 and 2, the new one has a gradient. That is a better shape for training
+signal and a worse one for *staged promotion*, because the stages no longer
+separate. On these numbers a policy reaching the 0.55 Level 1 gate would already
+be far past the 0.20 Level 2 gate, so the intermediate stage would be
+transitional in name only.
+
+Nothing here is broken -- the controller will run and its gates will fire -- but
+a promotion sequence it reports is no longer evidence that difficulty was
+approached in order. Re-derive the thresholds from measured per-level rates on
+the parameterised pool before quoting a staged result, and note that these
+figures are single-turn while the controller gates on the three-attempt
+scaffold, which was worth 3-4x on the old pool.
+
 ## Token envelope
 
 The original run used 1,024 completion tokens. In its step-1, step-5, and
