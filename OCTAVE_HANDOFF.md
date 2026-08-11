@@ -1,7 +1,7 @@
 # Octave RL handoff
 
-Last updated: 2026-08-09 (taskset repair, publication, retry-scaffold measurement,
-metric correction swept through the smaller-model artifact)
+Last updated: 2026-08-10 (parameterisation COMPLETE -- ten families, 240
+prompts; per-variant model sweep running; solved-only reward ablation held)
 
 Every table produced across this work, in chronological order with its setup and
 the three corrections marked, is collected in the summary artifact's appendix:
@@ -17,6 +17,87 @@ WS3 (the Nemotron routing study this substrate now serves) keeps its design doc
 and gate pre-reads at `~/Projects/Nemotron/NemoH/RL investigation - PART B/`.
 The G1 pre-read there is written against that design doc's section numbers and
 is the right entry point for "what does this mean for Nemotron".
+
+## Start here: what changed on 2026-08-10
+
+### Parameterisation is complete: ten families, 80 variants, 240 prompts
+
+`PARAMETERIZATION_DESIGN.md` has the decisions and the corrected measurement
+plan. In short: eight variants per family, the level ladder stays, and **both**
+a family holdout and a new variant holdout ship as config fields. This is
+**0.5.0, a breaking change to task semantics** -- no number measured before it
+is comparable at task or family level.
+
+- **240 distinct prompts, up from 30**, hitting the design's >=200 target exactly
+  on projection. `validate_natural_solutions.py --num-tasks 500` reports
+  **9,000/9,000 hidden cases** on the pinned Octave 10.2.0 with **no family on
+  the transitional path**: every variant is checked by its own naive solution,
+  not by one solution standing in for eight.
+- **All validation runs locally now.** The rootfs falls back to GHCR when Docker
+  Hub rate-limits, so the gate needs no pod and no Prime credential.
+- **A seed split still cannot hold out a question, and no variant count fixes
+  that** -- 240 of 240 prompts are shared between seeds. Quote generalization
+  from the *variant* holdout, whose default selection is a positional
+  placeholder until per-variant pass rates exist.
+- **Five ladder designs were rejected as degenerate across the ten families, and
+  one had shipped.** A level-2 step that collapses onto level 1 is invisible to
+  every validator here, because reference and naive solution both pass it.
+  There is now a test -- and the test itself had a vacuity hole, found by family
+  authors rather than by the test.
+- **A second class of defect was found and closed**: a graded output *element*
+  that never varies. 0.4.x `linsolve_tolerance` L3 graded a residual that was
+  zero by construction. `audit_constant_outputs.py` now checks per element,
+  within tolerance, anchored from both ends of variable-length outputs.
+
+**What is NOT known: whether these prompts are legible to a model.** A naive
+solution passing proves a prompt satisfiable, not readable. The per-variant
+sweep is the only instrument for that, and only Qwen3.5-0.8B has been measured
+so far -- see below.
+
+### First sweep result, and the baseline it must be read against
+
+Qwen3.5-0.8B, Level 1, single-turn, no guide, T=1.0, 288 tasks x 4 rollouts:
+
+| pool | solve | format_ok |
+|---|---:|---:|
+| 0.4.x | 0.030 | 0.71 |
+| **0.5.0** | **0.017 +/- 0.004** | 0.745 |
+
+**Read the paired baseline, not the famous number.** 0.8B's widely-quoted 0.117
+is the *three-attempt-with-guide* figure; the single-turn number was always
+0.030. Comparing 0.017 against 0.117 would report a collapse that did not
+happen. Format compliance is unchanged, so the longer descriptions (53 -> 332
+characters mean) are not breaking output discipline.
+
+No variant looks broken at this size: every failure read by hand is ordinary
+0.8B incompetence -- syntax errors, `help <fn>` inside a function body. **A
+variant is only suspect if it is near zero for all three models**, which needs
+the 4B and Nemotron cells.
+
+### The solved-only reward ablation lives on its own branch now
+
+`reward_mode = "solved_only"` and its two Qwen arms moved to
+`claude/solved-only-reward-ablation` so parameterisation could merge on its own.
+Nothing about it is lost; it is simply not in this history.
+
+**The premise it is usually stated with is wrong, and that is the useful part.**
+The environment has had **no execution bonus and no structured-output bonus
+since the 2026-08-05 hardening** -- code that runs and is wrong has been worth
+exactly 0.0 the whole time. The only channel the flag closes is **per-case
+partial credit**: 5 of 200 rollouts, about **6% of reward mass** on the
+2026-07-29 distribution. So mean reward should barely move; what it tests is
+whether that 6% does disproportionate *directional* work.
+
+**It is on hold for a reason that outlives the split.** Parameterisation is a
+breaking change to task semantics, so it invalidates every 0.4.x control,
+including both arms'. Re-baseline the controls on the new pool before running
+them. Note also that the 4B control has **no committed artifact anywhere in this
+repository** -- produce its logs or budget a control run.
+
+The `solved` metric stayed here rather than moving with the flag: it is
+measurement infrastructure the sweep tooling reads, it is undiscounted, and it
+means the same thing whatever the reward definition. That is the field to read
+those arms through when they eventually run.
 
 ## Start here: what changed on 2026-08-09
 

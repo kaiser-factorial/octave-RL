@@ -30,6 +30,174 @@ entry is worth having.
 
 ---
 
+## 2026-08-11 — A background run died silently, and the log filter ate the cause
+
+**Symptom.** The definitive per-variant sweep stopped producing rollouts at
+04:34:37, two hours and forty-four minutes in, midway through its seventh of
+twelve cells (Qwen3.5-4B level 1, 1,635 of 1,920 rollouts). Nothing reported it.
+The gap was noticed only because a routine status check showed the same rollout
+count an hour apart.
+
+**Root cause.** The eval's own log has it:
+
+```
+04:34:37 WARNING model call failed: ProviderError: Server disconnected ... (x4)
+04:34:37 WARNING interrupted -- cleaning up, please wait...
+04:34:37    INFO interception down
+```
+
+Four simultaneous provider disconnects, then an external interrupt that the
+eval handled cleanly and exited on. Provider errors were 6 in ~6,540 calls for
+that cell (0.09%), far below the 5% abort threshold, so they are a symptom
+rather than the cause; what ended the run was the interrupt.
+
+**Why the cause had to be excavated.** The wrapper was launched as
+`bash sweep.sh 2>&1 | grep -E "^#####|rc=|turns|rollouts"` -- filtered to keep
+the background log readable. That filter discarded the traceback and every
+warning that did not happen to contain one of those words. The diagnosis came
+from `outputs/.../eval.log`, which the eval writes itself, and would have been
+impossible had the eval not kept its own.
+
+**Blast radius.** Wall clock only. Six completed cells (Qwen 0.8B and 2B, all
+three levels) were intact on disk and were not re-run. The partial 4B level-1
+cell was deleted and redone whole rather than stitched, because a cell with
+mixed n is worse than a cheap redo. Roughly $0.30 of rollouts discarded.
+
+**Why it survived as long as it did.** The chain's 20-minute poll was written to
+detect *completion*, not *stall*. A run that stops producing output looks
+identical to a run that is working, if the only thing checked is whether the
+next stage should start. Progress was being reported honestly at every check --
+the counts were real -- and none of them was compared with the previous count.
+
+**Fix.** One model per background command, so an interruption costs one model
+rather than the remainder of the run. Never filter a long-running background
+log: keep it whole and grep the file afterwards. The poll should compare rollout
+counts against its previous observation and say "no progress since" rather than
+restating a stale count.
+
+**Residual risk.** The interrupt's origin is still unidentified. It was not disk
+(19 GB free), not memory (13 GB free), and not the concurrent probe, which was
+launched an hour and twenty minutes after the death. If a long-running
+background command has a lifetime bound in this environment, a run needing more
+than about three hours has to be chunked regardless of how reliable the provider
+is.
+
+---
+
+## 2026-08-10 — A graded output element that was always zero, for weeks
+
+**Symptom.** `linsolve_tolerance` level 3 asks for `[x; norm(A*x-b)]`. The
+generator draws `b = A @ x0`, so `b` lies in the range of `A` **by
+construction** and the least-squares residual is zero to machine precision.
+Measured over 200 draws at the generator's own seed: the largest residual
+element is **1.33e-14**, against the task's tolerance of **1e-7**. One of the
+graded numbers was a constant, and a model could hardcode it.
+
+**Root cause.** Two independently reasonable choices that interact badly.
+Drawing `b` from a known `x0` guarantees a consistent system, which is what you
+want for a *solve* task. Grading the residual is what makes a *tolerance* task.
+Together they grade a quantity the draw has already forced to zero.
+
+**Blast radius.** Every `linsolve_tolerance` level-3 number ever reported. The
+family sat at a 0.030 pass rate, so this made a hard task marginally easier
+rather than inflating anything visible -- one sixth of the graded output was
+free. No headline claim rests on it, and no other family is affected. The
+0.5.0 variant form does not have it: `b` is now drawn independently of `A`, and
+over-determined residual norms run 0.037 to 3.66.
+
+**Why it survived.** Every check this repository runs asks whether a solution
+*passes*. Both the reference and the naive solution compute the residual
+correctly, get zero, and match — so all three validators are green, and the
+naive-solution validator that catches undisclosed conventions is equally blind
+here, because there is no convention involved. Nothing asked the question that
+finds it: **does any graded output element take the same value on every case?**
+That is a property of the task, not of any solution, and no test looked at it.
+
+`scripts/audit_constant_outputs.py` exists and asks a neighbouring question --
+whether a whole task is constant-solvable, defined as all six expected outputs
+being exactly identical. It reported 0 tasks across the pool, correctly, because
+only one *element* of the vector is constant, not the whole output.
+
+**Fix.** Not fixed in 0.4.x, which is frozen; superseded by the 0.5.0 variant
+form for this family. Found while converting it, by an author asked to justify
+the tolerance rather than inherit it.
+
+**Verification.** 200 draws at seed 314159 through the 0.4.x generator: maximum
+residual element 1.33e-14, i.e. `< 1e-7` on every case. In 0.5.0, residual norms
+over the same number of draws span 0.037 to 3.66.
+
+**Residual risk.** The general question remains unasked by any test: **per
+element** of a graded output, does its value vary across a task's six hidden
+cases? `audit_constant_outputs.py` should be extended from whole-output to
+per-element before the next family is authored, because the variant form
+multiplies the surface eightfold and this defect is invisible to everything else
+the repository runs.
+
+---
+
+## 2026-08-10 — A level-2 prompt whose answer equalled its level 1, in the file that warns about it
+
+**Symptom.** `reduce_along_dim`, the worked exemplar for the 0.5.0 variant form,
+shipped a level-2 step that trimmed the `k` largest and `k` smallest values of
+each slice. For the two median variants the level-2 answer equalled the plain
+level-1 statistic of the same matrix on **240 of 240 measured cases**. Two of
+eight variants were a distinct prompt that was not a distinct problem.
+
+**Root cause.** A symmetric trim preserves the median exactly, by construction:
+discarding equal counts from both ends of a sorted slice cannot move its centre.
+The trim was chosen specifically to avoid the *one-sided* version of this bug --
+drop the k largest and `min` is unchanged, drop the k smallest and `max` is
+unchanged -- and the module docstring said so. The symmetric case moves `min`
+and `max` and was not checked against the remaining four statistics.
+
+**Blast radius.** No measurement, and no published claim: caught on the branch
+before any model saw the pool. Had it survived, two of eight variants would have
+inflated the distinct-*prompt* count while contributing nothing to distinct
+*problems*, and the per-variant sweep would have shown those two as anomalously
+easy at level 2 with no obvious reason.
+
+**Why it survived.** **No validator in this repository can catch it, and none
+ever will.** `validate_natural_solutions.py` scores the naive solution and
+`validate_local_runtime.py` scores the reference; both pass a degenerate level 2,
+because both compute exactly what the description asks for. The description is
+what fails -- it asks for something that happens to equal the previous level. The
+green checks were measuring "is this prompt satisfiable", and the question was
+"is this prompt a new problem". That is the same shape as every earlier entry
+here: a check adjacent to the thing that mattered.
+
+It was caught by a **peer agent converting a different family**, which hit the
+identical degeneracy in `sliding_window` (a symmetric trim leaves the median of
+a window unchanged too), rejected the trim ladder for its own family, and
+reported the exemplar as suspect. Cross-checking between independently authored
+families found what no test did.
+
+**Fix.** Level 2 now replaces each slice by its **running total** and then
+reduces. That changes the values being reduced rather than which of them are
+kept, so every statistic moves. The trim is gone, along with the slice-length
+constraint it needed. `sliding_window` independently rejected the same ladder
+and uses dilation for the same reason.
+
+Deliberately not fixed by special-casing the median: a per-variant ladder would
+make the family's level-2 semantics depend on which variant is drawn, which is
+harder to state in a prompt and harder to check.
+
+**Verification.** Level-2 answer against the plain level-1 statistic of the same
+matrix, 60 seeds x 6 cases per variant: was 240/240 identical for both median
+variants, now at most 4/360 for any of the eight, which is ordinary coincidence
+on small integer draws. Full gate after the fix: `validate_natural_solutions.py
+--num-tasks 500` reports **9,000/9,000 hidden cases, zero failures** across three
+levels on the pinned Octave 10.2.0.
+
+**Residual risk.** The degeneracy check is a script that was run, not a test that
+runs. It should be a test asserting that no variant's level-2 answer matches its
+level-1 statistic on a majority of cases -- otherwise the next family to convert
+gets to rediscover this the same way. Note also that the check compares against
+the *level-1 statistic*, not against every simpler function a model might guess;
+a level-2 step that collapses onto something other than level 1 would still pass
+it.
+
+---
+
 ## 2026-08-10 — A flag called inert after one immediate re-read
 
 **Symptom.** `prime env push --visibility PUBLIC` on 0.4.1, then

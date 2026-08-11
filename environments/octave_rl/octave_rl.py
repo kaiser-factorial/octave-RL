@@ -71,6 +71,17 @@ class OctaveData(vf.TaskData):
     tolerance: float
     require_vectorized: bool
     reference: str
+    # Which of the family's eight problems this task is. Empty for the families
+    # not yet on the 0.5.0 variant form, which still contribute one problem per
+    # level. Carried into the trace so a per-variant breakdown is possible
+    # without regenerating the pool and hoping the seed matches.
+    variant: str = ""
+    # The naive solution: what a competent Octave programmer writes from the
+    # description alone, with no defensive coercion. Never shown to the model --
+    # it is the input to `scripts/validate_natural_solutions.py`, the only check
+    # that has ever caught a task solvable solely through an undisclosed
+    # convention.
+    natural: str = ""
 
 
 async def execute_candidate_in_sandbox(
@@ -469,6 +480,19 @@ class OctaveTask(vf.Task[OctaveData, OctaveState, OctaveTaskConfig]):
     @vf.metric
     async def raw_case_fraction(self, trace: vf.Trace) -> float:
         return float(trace.info["octave"]["fraction"])
+
+    @vf.metric
+    async def solved(self, trace: vf.Trace) -> float:
+        """1.0 when every hidden case passed, on whichever attempt.
+
+        Reported so solve rate never has to be recovered by thresholding a
+        reward again. Doing that is what produced the false "retries raise
+        reward but not solve rate" headline on 2026-08-09: `case_fraction` is
+        discounted by attempt, so a threshold on it cannot count a success after
+        attempt 1. This field is undiscounted, so it means the same thing
+        whatever the turn budget or the reward definition.
+        """
+        return float(trace.info["octave"]["fraction"] == 1.0)
 
     @vf.metric
     async def execution_fraction(self, trace: vf.Trace) -> float:

@@ -5,7 +5,7 @@ language models to write GNU Octave functions. It uses the native
 `verifiers.v1` taskset and harness APIs, generates seeded problems with hidden
 NumPy-derived test cases, executes candidate `.m` files against a pinned GNU
 Octave 10.2.0 — in an isolated Prime Sandbox or a bounded local subprocess —
-and awards deterministic partial credit.
+and awards deterministic credit for correctness alone.
 
 The repository includes the environment, evaluation and prime-rl
 configurations, a staged curriculum controller, tests, analysis scripts, and
@@ -17,6 +17,10 @@ checkpoints, and model weights are intentionally not committed.
 - Ten generator families spanning reductions, logical indexing,
   reshape/permutation, broadcasting, sliding windows, linear solves,
   recurrences, structs/cells, string parsing, and signal identities.
+- **Eight variants per family** — a named choice of statistic, axis or operator
+  that changes what the function must compute, not merely which numbers test it.
+  All ten families are converted: **80 variants, 240 distinct prompts** against
+  30 before.
 - Three difficulty levels with deterministic generation from
   `(level, seed, task index)`.
 - Six hidden cases per task and fractional case-level correctness.
@@ -169,7 +173,11 @@ export OCTAVE_RL_OCTAVE_ROOTFS=/opt/octave-rootfs
 
 That pulls `gnuoctave/octave:10.2.0` from the registry and unpacks it — no
 Docker daemon, which matters on Prime pods and CI runners because those are
-containers themselves. With it set, candidates run under `unshare --net` →
+containers themselves. Anonymous Docker Hub pulls are rate-limited per source
+address, so a shared host can meet `HTTP Error 429` through no fault of this
+project; pass `--registry ghcr` for the mirror of the same amd64 manifest. Do
+not substitute a distro Octave — Ubuntu ships 8.4.0 and the pool was validated
+against 10.2.0. With it set, candidates run under `unshare --net` →
 `chroot` → `ulimit` bounds, so they see neither the host filesystem nor a
 network. Without a rootfs the host's own Octave is used. If a network namespace
 cannot be obtained the backend refuses to run unless
@@ -248,23 +256,64 @@ budget.** Retries are worth +0.22 to +0.38 solve rate, but a control shows
 79–95% of that is the extra attempt rather than the feedback, so a multi-turn
 score is mostly resampling.
 
+The `solved` metric reports the same thing as a 0/1 per rollout, undiscounted
+and independent of `reward_mode`, so solve rate never has to be recovered by
+thresholding a reward again.
+
+## Reward: correctness only
+
+There is no execution bonus and no structured-output bonus — both were removed
+in the 2026-08-05 hardening, because candidate code controls its own process
+output. Reward is the fraction of hidden cases passed, times the attempt
+multiplier, and nothing else.
+
 ## Train, validation, and test splits
 
 A pool's prompt is determined by `(family, level)` and carries nothing
-task-specific, so a 1,500-task pool contains about **30 distinct prompts** and
-two pools drawn with different seeds share every one of them. A seed holds out
-the hidden test *inputs*, not the question. RL here can therefore drive toward
-memorising 30 function bodies, and a seed-disjoint evaluation cannot detect it.
+task-specific, so before 0.5.0 a 1,500-task pool contained about **30 distinct
+prompts** and two pools drawn with different seeds shared every one of them. A
+seed holds out the hidden test *inputs*, not the question. RL here can therefore
+drive toward memorising a handful of function bodies, and a seed-disjoint
+evaluation cannot detect it.
 
-Excluding a **family** is what produces a held-out problem. The `families`
-taskset field does that (`None` selects all ten):
+**Since 0.5.0 every family carries eight variants** — a named choice of
+statistic, axis or operator that changes what the function must compute — so it
+contributes 24 distinct prompts across the three levels instead of 3. The pool
+holds **240 distinct prompts**.
+
+**Parameterisation does not make a seed split into a problem split, and cannot.**
+With 8 variants and ~50 tasks per family, every variant appears in every 500-task
+pool, so two seeds still share every prompt — measured at 72 of 72. Raising the
+variant count or drawing variants at random does not fix it; the latter only
+makes per-variant counts multinomial and weakens the per-variant statistics.
+
+Two fields hold out a **problem**, and both are configurable:
 
 ```python
-from generators import DEFAULT_HELDOUT_FAMILIES, training_families
+from generators import (
+    DEFAULT_HELDOUT_FAMILIES, DEFAULT_HELDOUT_VARIANTS,
+    declared_variants, training_families,
+)
+from specs import complement
 
 training_families()        # the 8 trained families
 DEFAULT_HELDOUT_FAMILIES   # ['reduce_along_dim', 'reshape_permute']
+
+declared_variants()        # {family: [variant key]} for converted families
+DEFAULT_HELDOUT_VARIANTS   # ['reduce_along_dim:min-rows', ...]
+complement(declared_variants(), DEFAULT_HELDOUT_VARIANTS)   # the trained variants
 ```
+
+| holdout | costs | holds out | use when |
+| --- | --- | --- | --- |
+| `families` | a fifth of training coverage | whole families, so an unpracticed problem *type* | testing transfer to an idiom never trained |
+| `variants` | nothing — every family stays in training | a quarter of the problems, inside families the model trains on | testing whether a practiced idiom generalizes across its parameters |
+
+The variant holdout is the stricter test and the cheaper one, but its **default
+selection is a positional placeholder** — the last two variants of each family,
+chosen without measurement, where the family holdout was picked from measured
+per-family pass rates. Re-choose it once per-variant pass rates exist, and do not
+quote a generalization number that rests on the placeholder.
 
 Use three splits:
 

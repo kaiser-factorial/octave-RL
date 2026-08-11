@@ -59,10 +59,11 @@ inputs, without allowing candidate stdout to supply a score.
 | Execution shaping | none; only hidden-case correctness is rewarded |
 | Retry multipliers | 1.00 / 0.85 / 0.60 |
 
-Raw correctness remains available as `raw_case_fraction`. The optimized reward
-is that correctness times the attempt multiplier: `1.00`, `0.85`, or `0.60`.
-There is deliberately no executable-program or structured-output bonus because
-candidate code controls its own process output.
+Raw correctness remains available as `raw_case_fraction`, and whole-task success
+as `solved`. The optimized reward is correctness times the attempt multiplier:
+`1.00`, `0.85`, or `0.60`. There is deliberately no executable-program or
+structured-output bonus because candidate code controls its own process output.
+
 
 Runs recorded before this protocol hardening used an execution bonus. Compare
 historical and future model capability only through `raw_case_fraction`, not

@@ -39,12 +39,23 @@ import json
 import os
 import shlex
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 DEFAULT_MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16"
 HELD_OUT_SEED = 20260808
 MAX_TOKENS = 1536
+
+# A per-variant sweep wants every rollout landing on a family that HAS variants.
+# Left unrestricted, a 24-variant sweep over the ten-family stream spends most of
+# its budget on families that still contribute one prompt per level, and the
+# per-variant cells come back too thin to tell 0.00 from 0.20.
+#
+# `--families converted` resolves this from `generators.VARIANT_MODULES` at run
+# time rather than from a list written here, so it cannot go stale as the
+# conversion proceeds.
+CONVERTED = "converted"
 
 # Measured against the BF16 deployment on 2026-08-08, 17*23 with max_tokens=200:
 #
@@ -67,18 +78,18 @@ num_rollouts = {rollouts}
 max_concurrent = {concurrency}
 push = false
 rich = false
-max_turns = 1
+max_turns = {max_turns}
 output_dir = "{output_dir}"
-max_total_tokens = 4096
+max_total_tokens = {total_tokens}
 
 [taskset]
 id = "octave-rl"
 level = {level}
 num_tasks = {pool_size}
-seed = {seed}
-# Single-turn, no guide: measure the policy, not the scaffold. Scoring runs on
-# this host against the pinned Octave rootfs, so no Prime Sandbox is involved.
-task = {{ octave_runtime = "local", user = {{ octave_runtime = "local", max_attempts = 1, guide_enabled = false }} }}
+seed = {seed}{families}
+# Scoring runs on this host against the pinned Octave rootfs, so no Prime
+# Sandbox is involved at any turn budget.
+task = {{ octave_runtime = "local", user = {{ octave_runtime = "local", max_attempts = {max_turns}, guide_enabled = {guide} }} }}
 
 [harness]
 id = "null"
@@ -123,6 +134,51 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=HELD_OUT_SEED)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=1,
+        help=(
+            "Attempt budget. 1 measures the policy; 3 measures the scaffold the "
+            "training loop actually runs, and the two answer different "
+            "questions -- a multi-turn score is mostly resampling, worth +0.22 "
+            "to +0.38 solve rate, of which a content-free retry captures "
+            "79-95%%. State the turn budget with every score."
+        ),
+    )
+    parser.add_argument(
+        "--guide",
+        action="store_true",
+        help=(
+            "Enable the guide model on the retry that needs it. Requires a "
+            "Prime credential in ~/.prime/config.json -- PRIME_API_KEY is NOT "
+            "inherited by the user-server subprocess. Only meaningful with "
+            "--max-turns 3."
+        ),
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=MAX_TOKENS,
+        help=(
+            "Completion cap. Raise it when measuring prompt legibility: a "
+            "rollout that hits the cap is a structural zero, not a capability "
+            "result, and the 0.5.0 pool truncated 21%% of reshape_permute "
+            "attempts at 1536. Report the truncation share with any score."
+        ),
+    )
+    parser.add_argument(
+        "--families",
+        nargs="+",
+        default=None,
+        help=(
+            "Restrict the pool to these families, or the literal 'converted' to "
+            "resolve the ones currently on the variant form. Omit for all ten. "
+            "Restricting changes which tasks are drawn but not the tasks "
+            "themselves -- build_tasks filters the full stream -- so a "
+            "restricted run stays comparable with an unrestricted one."
+        ),
+    )
+    parser.add_argument(
         "--num-rollouts",
         type=int,
         default=1,
@@ -157,6 +213,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    families = args.families
+    if families == [CONVERTED]:
+        sys.path.insert(0, str(Path("environments/octave_rl").resolve()))
+        from generators import VARIANT_MODULES
+
+        families = sorted(VARIANT_MODULES)
+        if not families:
+            raise SystemExit("no families are on the variant form yet")
+    families_line = (
+        "\nfamilies = [" + ", ".join(f'"{name}"' for name in families) + "]"
+        if families
+        else ""
+    )
+
     # Greedy stays at one rollout however --num-rollouts is set: T=0 is
     # deterministic, so a group of 8 would be 8 copies of one answer.
     cells = {"greedy": (0.0, 1), "sampled": (1.0, args.num_rollouts)}
@@ -178,7 +248,21 @@ def main() -> int:
                 pool_size=args.pool_size,
                 seed=args.seed,
                 temperature=temperature,
-                max_tokens=MAX_TOKENS,
+                families=families_line,
+                max_turns=args.max_turns,
+                guide="true" if args.guide else "false",
+                # The conversation budget has to hold every attempt plus the
+                # diagnostics and hint between them, or the last attempt is
+                # truncated by the *total* rather than by its own cap -- a
+                # structural zero that looks like a capability result. 6144 was
+                # the tested envelope at a 1536 completion cap; derive it so a
+                # raised cap cannot silently overrun it.
+                total_tokens=(
+                    max(6144, args.max_tokens * args.max_turns + 2048)
+                    if args.max_turns > 1
+                    else 4096
+                ),
+                max_tokens=args.max_tokens,
                 reasoning_effort=args.reasoning_effort,
                 output_dir=str(args.output / name),
             )
@@ -187,7 +271,10 @@ def main() -> int:
 
     (args.output / "plan.json").write_text(json.dumps(jobs, indent=2) + "\n")
     print(f"model     : {args.model}")
+    print(f"families  : {', '.join(families) if families else 'all ten'}")
     print(f"thinking  : off (reasoning_effort={args.reasoning_effort!r})")
+    print(f"max tokens: {args.max_tokens}")
+    print(f"turns     : {args.max_turns}{' with guide' if args.guide else ''}")
     print(f"cells     : {', '.join(args.cells)}")
     total = sum(args.num_tasks * (args.num_rollouts if j["cell"] == "sampled" else 1) for j in jobs)
     print(f"rollouts  : {total}")

@@ -1,7 +1,48 @@
 # Design: parameterised task descriptions
 
-**Status: proposed, not started. Written 2026-08-09 as the handoff into a fresh
-session.** Read `OCTAVE_HANDOFF.md` first, then this.
+**Status: conversion COMPLETE, 2026-08-10. All ten families on the variant
+form, 80 variants, 240 distinct prompts, the validator parameterised, both
+holdouts shipped, the naive-solution gate green at 9,000/9,000 with no family on
+the transitional path.** What remains is measurement, not construction: no model
+had seen these prompts when the conversion landed. Read `OCTAVE_HANDOFF.md`
+first, then this.
+
+## Decisions taken on 2026-08-10
+
+| open question | decision |
+|---|---|
+| how many variants per cell | **8**, giving 24 distinct prompts per family |
+| keep the level ladder | **yes** — level 3 is level 2 plus a vectorization constraint, as before |
+| family or variant holdout | **both**, as config fields; the variant holdout is new |
+| how the variant is chosen | round-robin on the task's position in its family's stream, never an rng draw |
+
+Measured with all ten families converted: **240 distinct prompts, up from 30** --
+the ≥200 target, hit exactly on the projection. `validate_natural_solutions.py
+--num-tasks 500` reports **9,000/9,000 hidden cases** on the pinned Octave
+10.2.0, with every variant checked by its own naive solution rather than one
+solution standing in for eight.
+
+### Correction to the measurement plan below: seed overlap cannot fall
+
+Success criterion 1 asks for "seed overlap well below 100%". **That is not
+achievable at this pool size under any scheme, and the criterion should be
+struck.** With 8 variants and ~50 tasks per family, each variant appears in a
+500-task pool with probability ≈ 0.999, so two seeds contain the same prompt set
+whatever the variant selection rule. Measured at three families converted: 93 of
+94 prompts shared between seed `0` and seed `20260808`, and the one exception is
+a shape sentence that varies with the draw rather than a different question.
+
+Drawing the variant from the rng rather than round-robin does not change this.
+It only makes per-variant counts multinomial — Binomial(50, 1/8), a spread of
+about 6 ± 2.4 — which degrades the per-variant pass rates that step 4 exists to
+collect. Round-robin gives exact counts and is strictly better.
+
+**What follows: a seed split still holds out inputs, not questions.** Parameter-
+isation raises the number of problems; it does not turn a seed into a problem
+split. **The variant holdout is the mechanism that produces a held-out
+problem**, and it is the one to quote a generalization number from. That is a
+narrower claim than this document originally made for the change, and it is the
+honest one.
 
 ## The problem, in one measurement
 
@@ -152,6 +193,13 @@ changes, so:
 
 ## Cost and shape of the work
 
+**What it actually cost.** The estimate below said half a session for spec
+plumbing plus three families, and a second session for the remaining seven. All
+ten landed in one session, because the per-family work parallelises cleanly once
+the contract and one worked exemplar exist. The compute estimate was wrong in
+the other direction: validation ran locally against a pinned rootfs for $0, and
+the only spend was the per-variant model sweep.
+
 | step | effort | compute |
 |---|---|---|
 | spec plumbing + three families | half a session | free |
@@ -164,18 +212,57 @@ changes, so:
 Roughly **$1.50 of compute** for the first three families end to end, and the
 design work is the expensive part.
 
-## Open questions for the next session
+## What the first two conversions actually cost, and what they caught
 
-1. **How much variation is too much?** Fifteen variants per cell makes each one
-   rare in a 500-task pool, which weakens per-variant statistics. Six to eight
-   is the suggestion; it is not measured.
-2. **Should the level ladder survive?** Levels currently mean "same task, harder
-   constraint". With a spec, difficulty could be a spec dimension instead, which
-   would be cleaner but is a larger change and breaks the `level` config field.
-3. **Does the family holdout still make sense?** With genuine problem diversity,
-   a *variant* holdout inside each family may be a better generalization test —
-   and it would not cost training coverage the way holding out two whole
-   families does.
-4. **Is the guide's value spec-dependent?** It is worth +0.062 (Nemotron) and
+The design work is the expensive part, as predicted — but the expense lands in a
+specific place: **finding the level-2 step that does not collapse the variant
+set.** Both converted families needed a rejected first attempt.
+
+- `reduce_along_dim`: a one-sided trim leaves `min` (or `max`) unchanged, so two
+  of eight variants would render a level-2 prompt whose answer equals its level
+  1. Fixed by trimming both ends.
+- `broadcast_arith`: centring each row of the grid cancels the `a` dependence
+  exactly on the separable operations, so every row comes out identical and code
+  that ignores `a` scores 6/6. Fixed by a column-wise running total.
+
+`sliding_window` rejected the trim ladder for a third instance of the same
+thing: a symmetric trim leaves a window's median unchanged too. That rejection
+is what exposed the *shipped* version of the bug in `reduce_along_dim`, where
+both median variants had a level-2 answer identical to their level 1 on 240 of
+240 cases. See `PIPELINE_LOG.md`.
+
+All of these are the same failure — **a distinct prompt that is not a distinct
+problem** — and none is visible to any validator, because the reference and the
+naive solution both pass. There is now a test for it (run the level-1 naive
+solution against the level-2 cases), but expect one rejected ladder per family
+and budget for it.
+
+One variant was rejected outright rather than shipped: a quotient in
+`broadcast_arith`, where a zero in `b` returns `Inf` and fails however the model
+writes it. The rule that made that call is the design's own: a variant whose
+`natural` cannot pass is not shippable.
+
+## Open questions
+
+Questions 1–3 were **settled on 2026-08-10**; see the decision table at the top.
+Eight variants per cell, the level ladder stays, and both holdouts ship as
+config fields rather than one replacing the other. What remains open:
+
+1. **Which variants should the default holdout name?** It is currently the last
+   two of each converted family — a positional placeholder, chosen without
+   measurement, where the family holdout beside it was picked from measured
+   per-family pass rates so that neither held-out family sits on the floor or
+   the ceiling. Re-choose after step 4 of the measurement plan, and do not quote
+   a generalization number resting on the placeholder.
+2. **Is the guide's value spec-dependent?** It is worth +0.062 (Nemotron) and
    +0.129 (Qwen-4B) at L1 today. On a more diverse pool it may matter more,
    since the model can no longer lean on having seen the problem.
+3. **Does a more diverse pool weaken the memorisation channel enough to show up
+   in the retry control?** Step 6 below. Still the most interesting number this
+   change can produce, and it is now measurable per variant rather than only in
+   aggregate.
+4. **Do any variants land near 0.00 in the per-variant sweep?** That is the
+   undisclosed-convention defect wearing a new hat, and the naive-solution
+   validator cannot see it — a naive solution passing says the prompt is
+   *satisfiable*, not that a model can read it. This is the gap that remains
+   after all the checking above.

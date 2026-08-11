@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,13 +10,17 @@ sys.path.insert(
 )
 
 import harness as harness_module
+import numpy as np
 import octave_rl as octave_environment
 import pytest
+from executors import execute_candidate_locally, runtime_description
 from generators import (
     DEFAULT_HELDOUT_FAMILIES,
-    DESCRIPTIONS,
+    DEFAULT_HELDOUT_VARIANTS,
     FAMILY_NAMES,
+    VARIANT_MODULES,
     build_tasks,
+    declared_variants,
     training_families,
 )
 from harness import (
@@ -42,6 +47,7 @@ from octave_rl import (
     execute_candidate_in_sandbox,
     execute_feedback_in_new_sandbox,
 )
+from specs import complement
 
 
 def test_seeded_generation_is_reproducible() -> None:
@@ -107,6 +113,22 @@ def test_a_family_generates_the_same_tasks_whichever_others_are_present() -> Non
             ), f"{family} L{level} differs when generated in isolation"
 
 
+def test_every_family_is_on_the_variant_form() -> None:
+    """`VARIANT_MODULES` must stay exhaustive over `FAMILY_NAMES`.
+
+    Before 0.5.0 a family missing from this mapping fell back to a single fixed
+    prompt per level, which is the defect the variant form removes. That
+    fallback is gone -- `build_tasks` now indexes `VARIANT_MODULES` directly, so
+    a missing family raises rather than degrading quietly -- but a family added
+    to `FAMILY_NAMES` without a module would fail at generation time rather than
+    here, which is a worse place to find out.
+    """
+    assert sorted(VARIANT_MODULES) == sorted(FAMILY_NAMES)
+    for name in FAMILY_NAMES:
+        keys = VARIANT_MODULES[name].VARIANT_KEYS
+        assert len(keys) == len(set(keys)) == 8, f"{name}: {keys}"
+
+
 def test_unknown_family_names_are_rejected() -> None:
     with pytest.raises(ValueError, match="unknown task families"):
         build_tasks(1, 5, 0, families=["reduce_along_dim", "nonexistent_family"])
@@ -148,19 +170,52 @@ def test_every_prompt_states_the_shape_the_grader_compares_against() -> None:
                     assert claim == f"Return a matrix with {rows} rows.", where
 
 
-def test_level_three_descriptions_restate_their_own_task() -> None:
+_STOPWORDS = {
+    "without", "loops", "for/while", "no", "not", "use", "do",
+    "return", "the", "a", "an", "of", "and", "that", "in", "to", "its",
+}
+
+
+def _content_words(text: str) -> set[str]:
+    cleaned = text.lower().replace(",", " ").replace(";", " ").replace(".", " ")
+    return {word for word in cleaned.split() if word not in _STOPWORDS}
+
+
+def _descriptions_by_problem(level: int) -> dict[tuple[str, str], str]:
+    """`(family, variant)` -> the description line of its generated prompt.
+
+    Read off the *generated prompt*, not off a table beside the generator. The
+    earlier version of this test read `DESCRIPTIONS` directly, which was
+    adequate while a family had one prompt per level and became a blind spot the
+    moment it had eight: the dict a converted family no longer consults would
+    have gone on passing forever.
+    """
+    found: dict[tuple[str, str], str] = {}
+    for task in build_tasks(level, 400, 5, include_reference=True):
+        lines = task["prompt"][0]["content"].splitlines()
+        # Layout is fixed by `_row`/`_row_from_variant`: heading, blank,
+        # signature, blank, description..., shape sentence, closing line.
+        description = "\n".join(lines[4:-2])
+        found[(task["info"]["family"], task["info"].get("variant", ""))] = description
+    return found
+
+
+def test_level_three_restates_its_own_task_for_every_problem() -> None:
     """Level 3 adds a constraint; it must not drop the task definition.
 
-    `struct_cell_wrangle` level 3 once read only "Return [column minima;
-    column maxima] without for/while loops", leaving the misleading family name
-    as the model's only clue about the input type. It scored 0.000 against
-    level 2's 0.792 on the same underlying task.
+    `struct_cell_wrangle` level 3 once read only "Return [column minima; column
+    maxima] without for/while loops", leaving the misleading family name as the
+    model's only clue about the input type. It scored 0.000 against level 2's
+    0.792 on the same underlying task.
+
+    With eight variants per family this has eight times the surface, and a
+    variant that drops its task at level 3 would be invisible in an aggregate
+    per-family score.
     """
     # Families whose level 3 is level 2 plus a vectorization constraint. The
     # rest change the task itself between those levels -- linsolve_tolerance
-    # switches to [x; norm(A*x-b)], sliding_window from mean to median,
-    # reshape_permute to a different permutation, string_parse to decimals --
-    # so their wording legitimately differs.
+    # switches to [x; norm(A*x-b)], reshape_permute to a different permutation,
+    # string_parse to decimals -- so their wording legitimately differs.
     same_task_at_level_three = {
         "reduce_along_dim",
         "logical_index",
@@ -168,18 +223,212 @@ def test_level_three_descriptions_restate_their_own_task() -> None:
         "sequence_recurrence",
         "struct_cell_wrangle",
         "signal_identity",
+        "sliding_window",
     }
-    stopwords = {"without", "loops", "for/while", "no", "return", "the", "a", "of", "and"}
-
-    def content_words(text: str) -> set[str]:
-        cleaned = text.lower().replace(",", " ").replace(";", " ").replace(".", " ")
-        return {word for word in cleaned.split() if word not in stopwords}
-
-    for family in sorted(same_task_at_level_three):
-        descriptions = DESCRIPTIONS[family]
-        missing = content_words(descriptions[1]) - content_words(descriptions[2])
+    level_two = _descriptions_by_problem(2)
+    level_three = _descriptions_by_problem(3)
+    checked = 0
+    for problem, description in sorted(level_two.items()):
+        family, _ = problem
+        if family not in same_task_at_level_three:
+            continue
+        assert problem in level_three, f"{problem} exists at L2 but not L3"
+        missing = _content_words(description) - _content_words(level_three[problem])
         assert not missing, (
-            f"{family} level 3 drops terms its level 2 states: {sorted(missing)}"
+            f"{family} variant {problem[1]!r} level 3 drops terms its level 2 "
+            f"states: {sorted(missing)}"
+        )
+        checked += 1
+    # Guard the guard: a change that stopped generating variants would make the
+    # loop body run zero times and the test would still pass.
+    assert checked >= len(same_task_at_level_three), checked
+
+
+def test_a_family_generates_the_same_tasks_whichever_variants_are_present() -> None:
+    """The family invariant, extended to the new filter.
+
+    A variant holdout is only a holdout if the kept tasks are the same objects a
+    full-pool measurement would have produced. Selecting variants *before*
+    generation -- the obvious optimisation -- would consume the rng differently
+    and silently make every split incomparable with every other.
+    """
+    kept = complement(declared_variants(), DEFAULT_HELDOUT_VARIANTS)
+    for level in (1, 2, 3):
+        held_keys = {name.split(":", 1)[1] for name in DEFAULT_HELDOUT_VARIANTS}
+        for selection, wanted in ((kept, False), (DEFAULT_HELDOUT_VARIANTS, True)):
+            filtered = build_tasks(
+                level, 150, 21, include_reference=True, variants=selection
+            )
+            # How far the *unfiltered* stream has to run to contain every kept
+            # task. Derived from the ids rather than guessed at: a filter that
+            # drops more of the stream makes it run further, so any fixed
+            # multiple of the row count goes stale as more families convert.
+            # Row k of an unfiltered pool carries index k, so this many rows
+            # covers every index the filtered pool used.
+            needed = max(
+                int(row["task"].rsplit("-", 1)[1]) for row in filtered
+            ) + 1
+            full = {
+                row["task"]: row
+                for row in build_tasks(level, needed, 21, include_reference=True)
+            }
+            converted = [
+                row for row in filtered
+                if row["info"]["family"] in declared_variants()
+            ]
+            assert converted, "no converted family survived the filter"
+            for row in converted:
+                assert (row["info"]["variant"] in held_keys) is wanted
+                twin = full[row["task"]]
+                assert json.dumps(row, sort_keys=True) == json.dumps(
+                    twin, sort_keys=True
+                ), f"{row['task']} differs when generated under a variant filter"
+
+
+def test_every_variant_is_drawn_and_counts_are_near_exact() -> None:
+    """Round-robin, not sampled: per-variant counts are exact, not multinomial.
+
+    At eight variants and fifty tasks per family, an rng-drawn variant would
+    give Binomial(50, 1/8) counts -- a spread of roughly 6 +/- 2.4, and the
+    occasional variant missing entirely from a pool. Per-variant pass rates are
+    the measurement this change exists to enable, so the counts are made exact
+    instead.
+    """
+    for family, keys in declared_variants().items():
+        counts = Counter(
+            task["info"]["variant"]
+            for task in build_tasks(1, 500, 0)
+            if task["info"]["family"] == family
+        )
+        assert set(counts) == set(keys), f"{family}: {sorted(counts)}"
+        assert max(counts.values()) - min(counts.values()) <= 1, dict(counts)
+
+
+def test_a_converted_family_ships_a_naive_solution_with_every_task() -> None:
+    """`natural` travels with the task, because a table beside it did not.
+
+    `validate_natural_solutions.py` is the only check that has ever caught a
+    task solvable solely through an undisclosed convention. It used to hold one
+    naive solution per (family, level), which would cover one variant of eight
+    and report PASS for the other seven.
+    """
+    for level in (1, 2, 3):
+        for task in build_tasks(level, 200, 3, include_reference=True):
+            info = task["info"]
+            if info["family"] not in declared_variants():
+                continue
+            natural = info.get("natural", "")
+            assert natural, f"{task['task']} carries no naive solution"
+            assert info["fn_name"] in natural
+            # A naive solution that coerces its ARGUMENTS is not naive: `b(:)`
+            # on an input is the defensive reshape that hid the linsolve defect
+            # for weeks. `(:)` on a value the function computed is different --
+            # it is the flatten `reshape_permute` prompts literally ask for --
+            # so the check names the arguments rather than banning the idiom.
+            arguments = info["signature"].split("(", 1)[1].rstrip(")").split(",")
+            for argument in (name.strip() for name in arguments):
+                assert f"{argument}(:)" not in natural, (
+                    f"{task['task']} naive solution coerces its argument "
+                    f"{argument!r}"
+                )
+
+
+class _VariantTask:
+    """The minimal surface ``execute_candidate_locally`` reads from a task."""
+
+    def __init__(self, variant) -> None:
+        self.fn_name = variant.signature.split("=")[1].split("(")[0].strip()
+        self.cases = variant.cases
+        self.tolerance = variant.tolerance
+
+    def model_dump(self):
+        return {
+            "fn_name": self.fn_name,
+            "cases": self.cases,
+            "tolerance": self.tolerance,
+        }
+
+
+def _octave_available() -> bool:
+    try:
+        runtime_description()
+    except Exception:  # noqa: BLE001 - any unavailability means skip
+        return False
+    return True
+
+
+@pytest.mark.skipif(
+    not _octave_available(),
+    reason="needs an Octave interpreter; run scripts/fetch_pinned_octave.py",
+)
+def test_no_variant_has_a_level_two_its_level_one_solution_already_solves() -> None:
+    """Level 2 must be a different *problem*, not merely a different sentence.
+
+    `reduce_along_dim` shipped a level-2 step -- trim the k largest and k
+    smallest -- that preserves the median exactly, so both median variants had a
+    level-2 answer identical to their level 1 on 240 of 240 cases. Neither
+    reference-based validator can catch that, and neither can the naive-solution
+    validator: all three pass a degenerate level 2, because all three compute
+    what the description asks for. It is the description that fails to ask for
+    something new. See PIPELINE_LOG, 2026-08-10.
+
+    So the check has to be this one: run each variant's *level-1* naive solution
+    against its *level-2* hidden cases. Full marks there means level 2 asked for
+    nothing new.
+
+    **What this test cannot measure, stated because an earlier version hid it.**
+    When level 2 takes different arguments from level 1 -- a new parameter, a
+    second matrix, a different input type -- the level-1 solution dies on an
+    arity error before computing anything, and `fraction` is 0.0 for a reason
+    that has nothing to do with the mathematics. The assertion passes, and it
+    passes vacuously. That was true of four of the six converted families and
+    was caught by two family authors independently, not by this test.
+
+    So the arity case is asserted rather than assumed: signatures that differ
+    are a structural difference between the two problems, and the test confirms
+    the level-1 solution genuinely could not run, rather than accepting a zero
+    of unknown provenance. It does NOT confirm those families' level 2 is a new
+    problem -- only their own per-variant census can, and each family's module
+    docstring records one. Do not read a green run here as covering them.
+    """
+    measured = 0
+    for family, module in VARIANT_MODULES.items():
+        for key in module.VARIANT_KEYS:
+            level_one = module.build(np.random.default_rng(4242), 1, key)
+            level_two = module.build(np.random.default_rng(4242), 2, key)
+            record = asyncio.run(
+                execute_candidate_locally(_VariantTask(level_two), level_one.natural)
+            )
+            if level_one.signature == level_two.signature:
+                # The probe ran on level 2's inputs, so this is a measurement.
+                assert record["fraction"] < 1.0, (
+                    f"{family}:{key} level 2 is fully solved by its own level-1 "
+                    f"solution -- a distinct prompt that is not a distinct problem"
+                )
+                measured += 1
+                continue
+            # Different signature: level 2 asks for different arguments, which
+            # is itself a difference between the problems. Confirm the zero came
+            # from that and not from something this test would otherwise miss.
+            assert record["executed"] == 0, (
+                f"{family}:{key} has different level-1 and level-2 signatures, "
+                f"yet its level-1 solution ran on level-2 inputs -- this test's "
+                f"vacuity assumption is wrong for it, so it needs a real probe"
+            )
+    # Guard the guard: if every family moved to a differing signature this test
+    # would assert nothing about degeneracy at all, and would still be green.
+    assert measured >= 8, f"only {measured} variants actually measured"
+
+
+def test_unknown_variant_names_are_rejected() -> None:
+    with pytest.raises(ValueError, match="unknown task variants"):
+        build_tasks(1, 5, 0, variants=["reduce_along_dim:no-such-variant"])
+    with pytest.raises(ValueError, match="family:key"):
+        build_tasks(1, 5, 0, variants=["mean-columns"])
+    with pytest.raises(ValueError, match="nothing to train on"):
+        complement(
+            declared_variants(),
+            [f"{fam}:{key}" for fam, keys in declared_variants().items() for key in keys],
         )
 
 
@@ -689,6 +938,21 @@ def test_only_correctness_is_rewarded_and_retry_aware() -> None:
         state=SimpleNamespace(attempts=1),
     )
     assert asyncio.run(octave_environment.OctaveTask.case_fraction(task, trace)) == 0.0
+
+
+def test_solved_is_reported_undiscounted() -> None:
+    # Solve rate must never again be recovered by thresholding a discounted
+    # reward (see PIPELINE_LOG, 2026-08-09). `solved` is the field to read, and
+    # it has to mean the same thing whatever the turn budget.
+    def solved(fraction: float, attempts: int) -> float:
+        trace = SimpleNamespace(
+            info={"octave": {"fraction": fraction}},
+            state=SimpleNamespace(attempts=attempts),
+        )
+        return asyncio.run(octave_environment.OctaveTask.solved(None, trace))
+
+    assert solved(1.0, 3) == 1.0
+    assert solved(5 / 6, 1) == 0.0
 
 
 def test_scorer_separates_execution_from_correctness() -> None:
