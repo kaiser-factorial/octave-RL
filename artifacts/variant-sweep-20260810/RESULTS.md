@@ -107,3 +107,43 @@ because the models obey the ban and then write worse code.
 Two reasons not to act on this yet: n is 3–4 tasks per cell here, and 4B
 truncation on these cells runs as high as **0.75** at the 1536-token cap. The
 definitive run fixes both.
+
+## The completion cap excludes the prompt — checked, not assumed
+
+Worth writing down because the reverse would change what every truncated cell
+means. Across the definitive run, **every call that stopped with
+`finish_reason == "length"` spent exactly 2048 completion tokens**, with prompt
+tokens reported separately:
+
+| family | truncated calls | completion | prompt |
+|---|---:|---:|---:|
+| `reshape_permute` | 599 | 2048 | 396 |
+| `signal_identity` | 124 | 2048 | 250 |
+| `broadcast_arith` | 94 | 2048 | 199 |
+
+`max_tokens` in `[sampling]` is a completion-only cap, so a longer prompt costs
+nothing against it. `max_total_tokens` covers the whole conversation but is not
+binding at single turn either — 396 + 2048 sits well inside 4096. A family with
+a long prompt is not being squeezed by it.
+
+**So the truncation is a property of the task, not of the accounting.**
+`reshape_permute` induces long generations: mean completion 899 tokens against
+122–365 for the families that never truncate, because models write out index
+reasoning and worked examples before the function. At a 2048 cap that costs 25%
+of 4B rollouts and 61% of 2B's, which makes its solve rate a floor rather than
+an estimate.
+
+`outputs/headroom-reshape` re-runs this family alone at 4096 on the *same tasks
+and seed* the definitive run uses — task ids verified identical — so it is a
+paired A/B on one variable:
+
+- solve rises, truncation gone → the cap was wrong and the prompt is fine;
+- solve flat, truncation gone → the prompt genuinely defeats these models, and
+  tightening its three-way restatement of the permutation is the next move
+  rather than a guess.
+
+That redundancy is not decoration. This is one of the three families that
+shipped the undisclosed-convention defect, and stating the permutation as an
+index equation, a dimension mapping and a resulting size is what removes the
+inverse reading. Shortening it is the obvious fix for truncation and the exact
+way to reintroduce the original defect, which is why it waits on this number.
