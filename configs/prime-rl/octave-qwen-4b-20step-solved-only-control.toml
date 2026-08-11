@@ -1,7 +1,7 @@
-# ABLATION on the 0.5.0 pool: solved_only reward. Qwen3.5-4B, Level 1.
+# CONTROL for the 0.5.0 solved_only ablation. Qwen3.5-4B, Level 1.
 #
-# Paired with `octave-qwen-4b-20step-solved-only-control.toml`, which is this
-# file with the flag off. BOTH arms must be run: the 0.4.x controls were
+# Paired with `octave-qwen-4b-20step-solved-only.toml`, which is this file with
+# `reward_mode = "solved_only"`. BOTH arms must be run: the 0.4.x controls were
 # invalidated by parameterisation, so there is no pre-existing baseline to pair
 # against and running only the ablation arm would measure nothing.
 #
@@ -65,7 +65,7 @@
 
 max_steps = 20
 seq_len = 8192
-output_dir = "training_outputs/octave-qwen-4b-20step-solved-only"
+output_dir = "training_outputs/octave-qwen-4b-20step-solved-only-control"
 clean_output_dir = true
 
 [deployment]
@@ -97,7 +97,7 @@ max_completion_tokens = 1536
 [[orchestrator.train.env]]
 name = "octave-level1-guided-local"
 group_size = 8
-taskset = { id = "octave-rl", families = ["logical_index", "broadcast_arith", "sliding_window", "linsolve_tolerance", "sequence_recurrence", "struct_cell_wrangle", "string_parse", "signal_identity"], level = 1, num_tasks = 500, seed = 314159, task = { octave_runtime = "local", reward_mode = "solved_only", second_attempt_multiplier = 0.85, guided_attempt_multiplier = 0.60, user = { colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B", octave_runtime = "local" } } }
+taskset = { id = "octave-rl", families = ["logical_index", "broadcast_arith", "sliding_window", "linsolve_tolerance", "sequence_recurrence", "struct_cell_wrangle", "string_parse", "signal_identity"], level = 1, num_tasks = 500, seed = 314159, task = { octave_runtime = "local", second_attempt_multiplier = 0.85, guided_attempt_multiplier = 0.60, user = { colocated = false, max_attempts = 3, guide_enabled = true, guide_model = "Qwen/Qwen3.5-35B-A3B", octave_runtime = "local" } } }
 harness = { id = "null", runtime = { type = "subprocess" } }
 max_turns = 3
 max_total_tokens = 6144
