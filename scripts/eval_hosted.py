@@ -78,18 +78,18 @@ num_rollouts = {rollouts}
 max_concurrent = {concurrency}
 push = false
 rich = false
-max_turns = 1
+max_turns = {max_turns}
 output_dir = "{output_dir}"
-max_total_tokens = 4096
+max_total_tokens = {total_tokens}
 
 [taskset]
 id = "octave-rl"
 level = {level}
 num_tasks = {pool_size}
 seed = {seed}{families}
-# Single-turn, no guide: measure the policy, not the scaffold. Scoring runs on
-# this host against the pinned Octave rootfs, so no Prime Sandbox is involved.
-task = {{ octave_runtime = "local", user = {{ octave_runtime = "local", max_attempts = 1, guide_enabled = false }} }}
+# Scoring runs on this host against the pinned Octave rootfs, so no Prime
+# Sandbox is involved at any turn budget.
+task = {{ octave_runtime = "local", user = {{ octave_runtime = "local", max_attempts = {max_turns}, guide_enabled = {guide} }} }}
 
 [harness]
 id = "null"
@@ -133,6 +133,28 @@ def main() -> int:
     parser.add_argument("--pool-size", type=int, default=500)
     parser.add_argument("--seed", type=int, default=HELD_OUT_SEED)
     parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=1,
+        help=(
+            "Attempt budget. 1 measures the policy; 3 measures the scaffold the "
+            "training loop actually runs, and the two answer different "
+            "questions -- a multi-turn score is mostly resampling, worth +0.22 "
+            "to +0.38 solve rate, of which a content-free retry captures "
+            "79-95%%. State the turn budget with every score."
+        ),
+    )
+    parser.add_argument(
+        "--guide",
+        action="store_true",
+        help=(
+            "Enable the guide model on the retry that needs it. Requires a "
+            "Prime credential in ~/.prime/config.json -- PRIME_API_KEY is NOT "
+            "inherited by the user-server subprocess. Only meaningful with "
+            "--max-turns 3."
+        ),
+    )
     parser.add_argument(
         "--max-tokens",
         type=int,
@@ -227,6 +249,19 @@ def main() -> int:
                 seed=args.seed,
                 temperature=temperature,
                 families=families_line,
+                max_turns=args.max_turns,
+                guide="true" if args.guide else "false",
+                # The conversation budget has to hold every attempt plus the
+                # diagnostics and hint between them, or the last attempt is
+                # truncated by the *total* rather than by its own cap -- a
+                # structural zero that looks like a capability result. 6144 was
+                # the tested envelope at a 1536 completion cap; derive it so a
+                # raised cap cannot silently overrun it.
+                total_tokens=(
+                    max(6144, args.max_tokens * args.max_turns + 2048)
+                    if args.max_turns > 1
+                    else 4096
+                ),
                 max_tokens=args.max_tokens,
                 reasoning_effort=args.reasoning_effort,
                 output_dir=str(args.output / name),
@@ -239,6 +274,7 @@ def main() -> int:
     print(f"families  : {', '.join(families) if families else 'all ten'}")
     print(f"thinking  : off (reasoning_effort={args.reasoning_effort!r})")
     print(f"max tokens: {args.max_tokens}")
+    print(f"turns     : {args.max_turns}{' with guide' if args.guide else ''}")
     print(f"cells     : {', '.join(args.cells)}")
     total = sum(args.num_tasks * (args.num_rollouts if j["cell"] == "sampled" else 1) for j in jobs)
     print(f"rollouts  : {total}")
