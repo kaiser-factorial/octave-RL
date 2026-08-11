@@ -20,6 +20,8 @@ include = [
     "executors.py",
     "generators.py",
     "harness.py",
+    "specs.py",
+    "families/",
     "pyproject.toml",
     "README.md",
 ]
