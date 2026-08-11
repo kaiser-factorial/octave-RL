@@ -1,7 +1,8 @@
 # Octave RL handoff
 
-Last updated: 2026-08-10 (parameterisation COMPLETE -- ten families, 240
-prompts; per-variant model sweep running; solved-only reward ablation held)
+Last updated: 2026-08-11 (parameterisation merged to main -- ten families, 240
+prompts; per-variant sweep measured; solved-only ablation closed as answered by
+the pool change)
 
 Every table produced across this work, in chronological order with its setup and
 the three corrections marked, is collected in the summary artifact's appendix:
@@ -74,30 +75,41 @@ No variant looks broken at this size: every failure read by hand is ordinary
 variant is only suspect if it is near zero for all three models**, which needs
 the 4B and Nemotron cells.
 
-### The solved-only reward ablation lives on its own branch now
+### The solved-only reward ablation: answered by the pool change, not run
 
-`reward_mode = "solved_only"` and its two Qwen arms moved to
-`claude/solved-only-reward-ablation` so parameterisation could merge on its own.
-Nothing about it is lost; it is simply not in this history.
+**Closed without running, on a measurement rather than a preference.** The
+ablation would have removed per-case partial credit, so that only a fully
+correct answer earns anything. It was proposed to stop the policy being paid for
+code that merely runs.
 
-**The premise it is usually stated with is wrong, and that is the useful part.**
-The environment has had **no execution bonus and no structured-output bonus
-since the 2026-08-05 hardening** -- code that runs and is wrong has been worth
-exactly 0.0 the whole time. The only channel the flag closes is **per-case
-partial credit**: 5 of 200 rollouts, about **6% of reward mass** on the
-2026-07-29 distribution. So mean reward should barely move; what it tests is
-whether that 6% does disproportionate *directional* work.
+Parameterisation did that on its own. Measured on the 0.5.0 pool, Qwen3.5-4B,
+5,760 single-turn rollouts:
 
-**It is on hold for a reason that outlives the split.** Parameterisation is a
-breaking change to task semantics, so it invalidates every 0.4.x control,
-including both arms'. Re-baseline the controls on the new pool before running
-them. Note also that the 4B control has **no committed artifact anywhere in this
-repository** -- produce its logs or budget a control run.
+| | rollouts | share | share of reward mass |
+|---|---:|---:|---:|
+| fully correct | 1,502 | 26.1% | 98.9% |
+| **partial** | **49** | **0.85%** | **1.08%** |
+| zero | 4,209 | 73.1% | 0% |
 
-The `solved` metric stayed here rather than moving with the flag: it is
-measurement infrastructure the sweep tooling reads, it is undiscounted, and it
-means the same thing whatever the reward definition. That is the field to read
-those arms through when they eventually run.
+On the 0.4.x pool the same channel was 2.5% of rollouts and about **6.2%** of
+reward mass. It has shrunk roughly six-fold, and **the reward is now 98.9%
+binary without the flag**.
+
+The mechanism is worth keeping in mind when designing future variants: a variant
+that states its convention precisely is all-or-nothing, because a reader either
+gets that convention right on all six hidden cases or wrong on all six. Precision
+in the prompt removes partial credit as a side effect.
+
+So the experiment would have tested whether 1.08% of reward mass does
+disproportionate directional work, on a lever of 49 rollouts in 5,760. That is
+not a null worth $6-9 of pod time; the distribution already answers it.
+
+**What survives, and where.** `reward_mode = "solved_only"` is implemented,
+tested and paired with matched control/ablation configs for the 0.5.0 pool on
+branch `claude/solved-only-reward-ablation` (PR #2, closed unmerged). If a future
+pool ever restores a meaningful partial-credit channel -- a family graded on many
+loosely-coupled outputs would do it -- that branch is one revert away. Re-measure
+the channel first; do not assume the 6% figure ever comes back.
 
 ## Start here: what changed on 2026-08-09
 
