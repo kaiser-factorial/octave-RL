@@ -931,7 +931,6 @@ def test_only_correctness_is_rewarded_and_retry_aware() -> None:
         config=SimpleNamespace(
             second_attempt_multiplier=0.85,
             guided_attempt_multiplier=0.60,
-            reward_mode="case_fraction",
         )
     )
     trace = SimpleNamespace(
@@ -941,49 +940,10 @@ def test_only_correctness_is_rewarded_and_retry_aware() -> None:
     assert asyncio.run(octave_environment.OctaveTask.case_fraction(task, trace)) == 0.0
 
 
-def _reward_of(fraction: float, *, reward_mode: str, attempts: int = 1) -> float:
-    task = SimpleNamespace(
-        config=SimpleNamespace(
-            second_attempt_multiplier=0.85,
-            guided_attempt_multiplier=0.60,
-            reward_mode=reward_mode,
-        )
-    )
-    trace = SimpleNamespace(
-        info={"octave": {"fraction": fraction, "structured_result": 1.0}},
-        state=SimpleNamespace(attempts=attempts, guide_used=False),
-    )
-    return asyncio.run(octave_environment.OctaveTask.case_fraction(task, trace))
-
-
-def test_solved_only_pays_nothing_for_code_that_merely_runs() -> None:
-    # The 2026-08-10 ablation. Partial case credit is the only channel through
-    # which an answer that is not fully correct can be worth anything -- there
-    # has been no execution or structured-output bonus since the 2026-08-05
-    # hardening -- so closing it makes the reward strictly "right answer or
-    # nothing". Measured on the 2026-07-29 distribution, that channel is 5 of
-    # 200 rollouts and about 6% of total reward mass.
-    for fraction in (0.0, 1 / 6, 0.5, 5 / 6):
-        assert _reward_of(fraction, reward_mode="solved_only") == 0.0
-    assert _reward_of(1.0, reward_mode="solved_only") == 1.0
-
-    # The default is unchanged, so every historical config reproduces itself.
-    assert _reward_of(0.5, reward_mode="case_fraction") == 0.5
-
-
-def test_solved_only_still_discounts_by_attempt() -> None:
-    # The ablation removes partial credit, not the retry discount. Leaving the
-    # discount in place is what keeps this a one-variable change against the
-    # paired control run.
-    assert _reward_of(1.0, reward_mode="solved_only", attempts=2) == 0.85
-    assert _reward_of(1.0, reward_mode="solved_only", attempts=3) == 0.60
-    assert _reward_of(5 / 6, reward_mode="solved_only", attempts=2) == 0.0
-
-
-def test_solved_is_reported_undiscounted_in_both_reward_modes() -> None:
+def test_solved_is_reported_undiscounted() -> None:
     # Solve rate must never again be recovered by thresholding a discounted
     # reward (see PIPELINE_LOG, 2026-08-09). `solved` is the field to read, and
-    # it has to mean the same thing in the ablation arm as in the control.
+    # it has to mean the same thing whatever the turn budget.
     def solved(fraction: float, attempts: int) -> float:
         trace = SimpleNamespace(
             info={"octave": {"fraction": fraction}},
@@ -993,14 +953,6 @@ def test_solved_is_reported_undiscounted_in_both_reward_modes() -> None:
 
     assert solved(1.0, 3) == 1.0
     assert solved(5 / 6, 1) == 0.0
-
-
-def test_reward_mode_is_validated_at_load() -> None:
-    taskset = octave_environment.load_environment(reward_mode="solved_only")
-    assert taskset.config.task.reward_mode == "solved_only"
-    assert octave_environment.load_environment().config.task.reward_mode == "case_fraction"
-    with pytest.raises(ValueError, match="reward_mode"):
-        octave_environment.load_environment(reward_mode="execution_bonus")
 
 
 def test_scorer_separates_execution_from_correctness() -> None:

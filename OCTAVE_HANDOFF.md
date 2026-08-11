@@ -74,41 +74,30 @@ No variant looks broken at this size: every failure read by hand is ordinary
 variant is only suspect if it is near zero for all three models**, which needs
 the 4B and Nemotron cells.
 
-### The solved-only reward ablation is built, tested, and ON HOLD
+### The solved-only reward ablation lives on its own branch now
 
-`reward_mode = "solved_only"` makes a fully correct answer worth 1.0 and
-everything else worth 0.0, still discounted 0.85 / 0.60 by attempt. Default
-stays `"case_fraction"`, so every historical config reproduces itself.
+`reward_mode = "solved_only"` and its two Qwen arms moved to
+`claude/solved-only-reward-ablation` so parameterisation could merge on its own.
+Nothing about it is lost; it is simply not in this history.
 
-**A premise worth correcting before reading the results.** The environment has
-had **no execution bonus and no structured-output bonus since the 2026-08-05
-hardening** — code that runs and is wrong has been worth exactly 0.0 for five
-days. The only thing this ablation removes is **per-case partial credit**. That
-is a real channel but a small one: on the 2026-07-29 distribution, 5 of 200
-rollouts were partially correct, carrying about **6% of total reward mass**.
+**The premise it is usually stated with is wrong, and that is the useful part.**
+The environment has had **no execution bonus and no structured-output bonus
+since the 2026-08-05 hardening** -- code that runs and is wrong has been worth
+exactly 0.0 the whole time. The only channel the flag closes is **per-case
+partial credit**: 5 of 200 rollouts, about **6% of reward mass** on the
+2026-07-29 distribution. So mean reward should barely move; what it tests is
+whether that 6% does disproportionate *directional* work.
 
-So the honest prior is that mean reward barely moves. What the ablation actually
-tests is whether that 6% is doing disproportionate *directional* work — pulling
-the policy toward "produce something that runs and is nearly right" instead of
-"be right". Removing it also removes within-group spread in every group where
-nobody fully solved the task, which means **more empty batches**, and that count
-is a result rather than a nuisance.
+**It is on hold for a reason that outlives the split.** Parameterisation is a
+breaking change to task semantics, so it invalidates every 0.4.x control,
+including both arms'. Re-baseline the controls on the new pool before running
+them. Note also that the 4B control has **no committed artifact anywhere in this
+repository** -- produce its logs or budget a control run.
 
-- Configs: `configs/prime-rl/octave-qwen-{08b,4b}-20step-solved-only.toml`, each
-  byte-identical to a control config except for `output_dir` and the flag.
-  Training comparisons are **Qwen-only**; the Nemotron arm was considered and
-  dropped, because Nemotron has never been trained here and would have needed a
-  new topology, a renderer guess and its own control.
-- **Confirm the controls exist before treating either as paired.** The 0.8B
-  batch-64 control is written up here. **The 4B rung has no committed artifact
-  and no per-step table anywhere in this repository** — produce its logs or
-  budget a control arm for it.
-- Read outcomes from the new `solved` metric and `raw_case_fraction`. The two
-  arms define reward differently, so their reward columns are **not comparable**.
-- **On hold, deliberately.** Parameterisation is a breaking change to task
-  semantics, so shipping 0.5.0 invalidates every 0.4.x control including this
-  arm's. Settle the pool first. The session that prepared it also had no GPU, no
-  `prime` CLI and no Prime credential.
+The `solved` metric stayed here rather than moving with the flag: it is
+measurement infrastructure the sweep tooling reads, it is undiscounted, and it
+means the same thing whatever the reward definition. That is the field to read
+those arms through when they eventually run.
 
 ## Start here: what changed on 2026-08-09
 

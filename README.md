@@ -5,8 +5,7 @@ language models to write GNU Octave functions. It uses the native
 `verifiers.v1` taskset and harness APIs, generates seeded problems with hidden
 NumPy-derived test cases, executes candidate `.m` files against a pinned GNU
 Octave 10.2.0 — in an isolated Prime Sandbox or a bounded local subprocess —
-and awards deterministic credit for correctness alone, per hidden case or
-all-or-nothing.
+and awards deterministic credit for correctness alone.
 
 The repository includes the environment, evaluation and prime-rl
 configurations, a staged curriculum controller, tests, analysis scripts, and
@@ -261,35 +260,12 @@ The `solved` metric reports the same thing as a 0/1 per rollout, undiscounted
 and independent of `reward_mode`, so solve rate never has to be recovered by
 thresholding a reward again.
 
-## Reward: correctness only, and optionally all-or-nothing
+## Reward: correctness only
 
 There is no execution bonus and no structured-output bonus — both were removed
 in the 2026-08-05 hardening, because candidate code controls its own process
 output. Reward is the fraction of hidden cases passed, times the attempt
-multiplier.
-
-Per-case partial credit is therefore the only channel through which an answer
-that is not fully correct can be worth anything. `reward_mode` closes it:
-
-| `reward_mode` | a fully correct answer | 3 of 6 cases right | code that runs and is wrong | code that does not run |
-| --- | ---: | ---: | ---: | ---: |
-| `"case_fraction"` (default) | 1.00 | 0.50 | 0.00 | 0.00 |
-| `"solved_only"` | 1.00 | 0.00 | 0.00 | 0.00 |
-
-Both are discounted by attempt in the same way, and neither changes any metric:
-`execution_fraction`, `correct_given_executed`, `transposed_fraction` and
-`raw_case_fraction` still report what the code did. `"solved_only"` stops paying
-for it, it does not stop measuring it.
-
-Two runs on different `reward_mode` settings have **incomparable reward
-columns** by construction. Compare them through `solved` and
-`raw_case_fraction`. Expect `"solved_only"` to leave fewer groups carrying
-gradient, because a group where nothing is fully correct now has zero advantage
-even where partial credit would have separated its members.
-
-The `*-solved-only.toml` configs in `configs/prime-rl/` are the ablation arms.
-Each is byte-identical to a control config except for `output_dir` and this
-flag; the Nemotron one has no control and is marked unvalidated in its header.
+multiplier, and nothing else.
 
 ## Train, validation, and test splits
 
