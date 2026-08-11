@@ -420,6 +420,31 @@ def test_no_variant_has_a_level_two_its_level_one_solution_already_solves() -> N
     assert measured >= 8, f"only {measured} variants actually measured"
 
 
+def test_the_default_variant_holdout_is_frozen_and_well_formed() -> None:
+    """Two per family, every key real, no family left unrepresented.
+
+    The holdout is part of what a published generalization number means, so it
+    is an explicit frozen list rather than a positional expression. This does
+    not check *which* variants were chosen -- that came from the 2026-08-11
+    sweep and is argued in the constant's comment -- only that the list stays
+    the shape the argument assumes. A family silently dropping out of it would
+    quietly widen the training set.
+    """
+    declared = declared_variants()
+    per_family: dict[str, list[str]] = {}
+    for name in DEFAULT_HELDOUT_VARIANTS:
+        family, _, key = name.partition(":")
+        assert key in declared.get(family, []), f"{name} is not a real variant"
+        per_family.setdefault(family, []).append(key)
+    assert sorted(per_family) == sorted(declared), "every family must be represented"
+    for family, keys in per_family.items():
+        assert len(keys) == len(set(keys)) == 2, f"{family}: {keys}"
+    # The split has to remain a split.
+    kept = complement(declared, DEFAULT_HELDOUT_VARIANTS)
+    assert len(kept) == sum(len(v) for v in declared.values()) - len(DEFAULT_HELDOUT_VARIANTS)
+    assert not ({f"{f}:{k}" for f, ks in per_family.items() for k in ks} & set(kept))
+
+
 def test_unknown_variant_names_are_rejected() -> None:
     with pytest.raises(ValueError, match="unknown task variants"):
         build_tasks(1, 5, 0, variants=["reduce_along_dim:no-such-variant"])

@@ -169,25 +169,46 @@ def declared_variants() -> dict[str, list[str]]:
     }
 
 
-# The default variant holdout: the last two variants of each converted family.
+# The default variant holdout: two variants per family, FROZEN at 0.5.0.
 #
-# **Provisional, and chosen without measurement.** The family holdout beside it
-# was picked from measured per-family pass rates, so that neither held-out family
-# sits on the floor or the ceiling. No per-variant pass rates exist yet -- that
-# sweep is step 4 of the measurement plan in `PARAMETERIZATION_DESIGN.md` -- so
-# this is a positional default, not a recommendation. Re-choose it once the
-# sweep lands, and do not quote a generalization number that rests on it before
-# then.
+# **Chosen from measurement, and frozen because it is part of what a published
+# number means.** The previous default was positional -- the last two keys of
+# each family -- which was honest about being arbitrary and was also wrong in a
+# way that mattered: for `string_parse` it selected two variants that Qwen3.5-4B
+# solves at 0.00 and 0.01, and a generalization test against the floor cannot
+# measure a change in either direction. That is the same failure the family
+# holdout was explicitly chosen to avoid.
 #
-# Two of eight holds out a quarter of the problems while leaving every family in
-# training, where the family holdout costs a fifth of training coverage to hold
-# out any problem at all.
+# The rule, applied to the 2026-08-11 per-variant sweep (Qwen3.5-4B, 480 tasks
+# per level, three levels pooled, 72 rollouts per variant):
+#
+#   1. rank a family's eight variants by measured solve rate;
+#   2. keep the middle half of the observed range, discarding floor and ceiling;
+#   3. from that band take the pair differing in the most spec components, so
+#      the holdout tests transfer across a family's dimensions rather than along
+#      one of them;
+#   4. break ties toward the family median, then alphabetically, so the
+#      selection is reproducible from the data rather than from a judgement.
+#
+# `string_parse` is ranked on Nemotron's level-1 rates instead: Qwen3.5-4B
+# solves its whole range between 0.00 and 0.08, so it cannot discriminate there,
+# and ranking on a floored model would have reproduced the defect being fixed.
+#
+# **Do not change this list without a version bump.** Variant keys are a public
+# interface and the holdout is part of what "held out" means in any published
+# result; silently reselecting it would make old and new generalization numbers
+# incomparable while looking identical.
 DEFAULT_HELDOUT_VARIANTS: list[str] = [
-    f"{family}:{key}"
-    for family, keys in {
-        name: list(module.VARIANT_KEYS) for name, module in VARIANT_MODULES.items()
-    }.items()
-    for key in keys[-2:]
+    "broadcast_arith:product", "broadcast_arith:min",
+    "linsolve_tolerance:solutionresidual-overdetermined", "linsolve_tolerance:residualvector-overdetermined",
+    "logical_index:even-extract", "logical_index:magnitude-zero",
+    "reduce_along_dim:mean-columns", "reduce_along_dim:range-columns",
+    "reshape_permute:perm213-row", "reshape_permute:perm312-column",
+    "sequence_recurrence:order1-total", "sequence_recurrence:order2-terms",
+    "signal_identity:shift-forward", "signal_identity:autocorr-linear",
+    "sliding_window:mean-stride1", "sliding_window:range-strided",
+    "string_parse:semicolon-integers-column", "string_parse:mixed-decimals-row",
+    "struct_cell_wrangle:sumcount-columns", "struct_cell_wrangle:minmedmax-rows",
 ]
 
 
