@@ -69,6 +69,15 @@ Runs recorded before this protocol hardening used an execution bonus. Compare
 historical and future model capability only through `raw_case_fraction`, not
 shaped training reward.
 
+Since 0.5.0 the reward is **98.9% binary by construction**. Per-case partial
+credit -- the last channel through which an answer that is not fully correct can
+earn anything -- accounts for 1.08% of reward mass on the parameterised pool
+(Qwen3.5-4B, 5,760 rollouts: 1,502 fully correct, 49 partial, 4,209 zero),
+against about 6.2% on the 0.4.x pool. A variant that states its convention
+precisely is all-or-nothing, so a reader gets it right on all six hidden cases or
+wrong on all six. An ablation removing partial credit was designed and then
+closed unrun, because the pool change had already done what it was for.
+
 ## Curriculum
 
 | Family | Level 1 | Level 2 | Level 3 |
