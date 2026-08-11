@@ -296,17 +296,17 @@ def _describe(key: str, level: int) -> str:
     perm, _ = _parse(key)
     size = " ".join(f"dims({dimension})" for dimension in perm)
 
-    # 1. How `x` becomes `A`. Stated element-wise first, then generalised: the
-    #    column-major reading is the convention this family's 0.4.x prompt left
-    #    a reader to guess, and a rule plus three instances of it is harder to
-    #    misread than either alone.
+    # 1. How `x` becomes `A`. `A = reshape(x, dims)` is the whole statement;
+    #    "column-major" names the convention it implements. The element-wise
+    #    instances that used to follow (x(1)=A(1,1,1), x(2)=A(2,1,1), ...) are
+    #    gone -- measured 2026-08-11, they were not what made the prompt
+    #    unambiguous, and length was costing real solves: at a 2048-token cap
+    #    this family truncated 25% of 4B rollouts against 0-11% elsewhere, and
+    #    raising the cap to 4096 moved 4B level 1 from 0.156 to 0.250.
     given = (
         "x is a row vector of dims(1)*dims(2)*dims(3) elements and dims is a "
-        "1-by-3 vector of sizes. The three sizes are distinct and each is at "
-        "least 2. x holds the elements of a 3-D array A of size dims in "
-        "column-major order, so that A = reshape(x, dims): x(1) = A(1,1,1), "
-        "x(2) = A(2,1,1), x(dims(1)+1) = A(1,2,1), and in general the first "
-        "subscript varies fastest along x and the third varies slowest."
+        "1-by-3 vector of three distinct sizes, each at least 2. Let "
+        "A = reshape(x, dims), the 3-D array holding x in column-major order."
     )
 
     # 2. The reversal, at levels 2 and 3, as an equation over subscripts.
@@ -320,22 +320,25 @@ def _describe(key: str, level: int) -> str:
         )
         source = "R"
 
-    # 3. What `B` is: the equation, the dimension mapping, and the size -- three
-    #    statements of one fact, so the inverse reading of "reorder the
-    #    dimensions" contradicts the prompt rather than merely differing from
-    #    its intent.
+    # 3. What `B` is: the subscript equation and the resulting size. Two
+    #    statements of one fact, not three -- the prose dimension mapping was
+    #    dropped on 2026-08-11.
+    #
+    #    The equation is the load-bearing one and stays. "Reorder the dimensions
+    #    to [2 1 3]" has two defensible inverse readings and this family shipped
+    #    that defect once; a reader holding the wrong one has to contradict
+    #    B(i,j,k) = A(...) and the stated size, which no phrasing of the prose
+    #    mapping added to. Guarded by the inverse-permutation probe, which must
+    #    keep scoring 0.000 on the four 3-cycle variants (the three self-inverse
+    #    permutations cannot distinguish the readings and never could).
     build_b = (
         f" Form the 3-D array B of size [{size}] defined by "
-        f"{_element_identity(perm, source)} for every valid i, j, k; "
-        f"equivalently, {_dimension_mapping(perm, source)}."
+        f"{_element_identity(perm, source)} for every valid i, j, k."
     )
 
-    # 4. The flattening order, named as the idiom that produces it.
-    flatten = (
-        " Return the elements of B in column-major order: B's first subscript "
-        "varying fastest and its third varying slowest, which is the order "
-        "Octave's B(:) produces."
-    )
+    # 4. The flattening order, named as the idiom that produces it. `B(:)` is
+    #    the shortest unambiguous statement of it, so the gloss goes.
+    flatten = " Return the elements of B in column-major order, as B(:) gives them."
 
     task = given + reversal + build_b + flatten
     if level == 3:
