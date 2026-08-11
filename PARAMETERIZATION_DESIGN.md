@@ -1,11 +1,17 @@
 # Design: parameterised task descriptions
 
-**Status: conversion COMPLETE, 2026-08-10. All ten families on the variant
-form, 80 variants, 240 distinct prompts, the validator parameterised, both
-holdouts shipped, the naive-solution gate green at 9,000/9,000 with no family on
-the transitional path.** What remains is measurement, not construction: no model
-had seen these prompts when the conversion landed. Read `OCTAVE_HANDOFF.md`
-first, then this.
+**Status: conversion COMPLETE and merged, 2026-08-11. All ten families on the
+variant form, 80 variants, 240 distinct prompts, the validator parameterised,
+both holdouts shipped, the naive-solution gate green at 9,000/9,000 with no
+family on the transitional path.** Read `OCTAVE_HANDOFF.md` first, then this.
+
+Measured since: no level-1 variant is near-zero for both Qwen3.5-4B and
+Nemotron, so nothing in the pool is illegible; `reshape_permute` was tightened
+after its prompt was shown to induce runaway generation (25-61% of rollouts hit
+the completion cap against 0-11% elsewhere), with the inverse-reading probe
+confirming the disambiguation survived; and the solved-only reward ablation was
+closed unrun, because parameterisation shrank per-case partial credit from ~6.2%
+of reward mass to 1.08% on its own.
 
 ## Decisions taken on 2026-08-10
 

@@ -80,18 +80,20 @@ closed unrun, because the pool change had already done what it was for.
 
 ## Curriculum
 
-| Family | Level 1 | Level 2 | Level 3 |
-| --- | --- | --- | --- |
-| `reduce_along_dim` | column mean | k-th largest | k-th largest, no loops |
-| `logical_index` | positive selection | bounded replacement | bounded replacement, no loops |
-| `reshape_permute` | column reshape | `[2 1 3]` permutation | `[3 1 2]`, no loops |
-| `broadcast_arith` | outer sum | squared pairwise difference | squared difference, no loops |
-| `sliding_window` | valid sums | strided means | strided medians, no loops |
-| `linsolve_tolerance` | square solve | least squares | solution plus residual |
-| `sequence_recurrence` | arithmetic progression | second-order recurrence | vectorized recurrence intent |
-| `struct_cell_wrangle` | elementwise row operation | column extrema | column extrema, no loops |
-| `string_parse` | comma-separated integers | optional whitespace | finite decimals, no loops |
-| `signal_identity` | circular shift | FFT autocorrelation | FFT autocorrelation, no loops |
+**Superseded by 0.5.0.** The table that stood here listed one task per (family,
+level) -- "column mean", "k-th largest", and so on -- which was accurate while a
+family had exactly one problem per level. It no longer is, and a table of ten
+rows cannot state what eighty variants ask. It is removed rather than updated,
+because a stale-looking-current table is worse than none: this repository's
+recurring failure is a claim that reads as live and is not.
+
+Each family now declares eight **variants** -- a named choice of statistic, axis
+or operator that changes what the function must compute -- rendered at three
+levels, for 240 distinct prompts. The authoritative statement of what any
+variant asks is the family module itself, in
+`environments/octave_rl/families/<family>.py`: each carries its `VARIANT_KEYS`
+and the code that builds the description, the reference and the naive solution
+together from one definition. `PARAMETERIZATION_DESIGN.md` covers the design.
 
 The generator is deterministic for `(level, seed, task index)`. Expected
 values are calculated by NumPy before rollout and retained by the trusted task
