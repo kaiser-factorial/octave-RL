@@ -1,5 +1,8 @@
 # Per-variant pass rates on the 0.5.0 pool — PRELIMINARY, NOT PAIRED
 
+**Superseded by the definitive run** (`--num-tasks 480`, four models, 2048-token
+cap). Kept as the record of what was measured and why it was redone.
+
 Single-turn, no guide, T=1.0, thinking off, seed `20260808`, scored locally
 against the pinned Octave 10.2.0. Generation through Prime Inference; no GPU, no
 Sandbox.
@@ -63,3 +66,44 @@ already argued at length. That needs its own three-turn cell.
 **Whether the pool is legible.** A naive solution passing
 `validate_natural_solutions.py` proves a prompt satisfiable. Only a model
 reading it proves it legible, and only the paired run can say so per variant.
+
+## Level rates, all three models (single-turn, 1536-token cap)
+
+Solve rate with standard error across tasks, n = 288 tasks per cell.
+
+| model | L1 | L2 | L3 |
+|---|---:|---:|---:|
+| Nemotron-3-Nano | 0.571 ± 0.019 | 0.582 ± 0.019 | 0.337 ± 0.021 |
+| Qwen3.5-4B | 0.325 ± 0.017 | 0.279 ± 0.017 | 0.174 ± 0.015 |
+| Qwen3.5-0.8B | 0.017 ± 0.004 | 0.000 ± 0.000 | 0.001 ± 0.001 |
+
+Level 2 is not harder than level 1 for Nemotron (0.582 against 0.571) — the same
+flatness the 0.4.x pool showed between levels 2 and 3, now one rung lower.
+
+## The near-zero intersection, and why it is not a defect
+
+Eleven variant-levels are at or below 0.02 for **both** 4B and Nemotron, out of
+240 paired cells. **All eleven are level 3**, and none has the shape that
+indicates a broken prompt:
+
+| | level 2 | level 3 |
+|---|---|---|
+| execution | 0.17–0.82 | 0.00–0.32 |
+| solve | nonzero for 9 of 11 | 0.00 |
+
+An unreadable prompt or an undisclosed convention shows up as **high execution
+with zero solve** — the model writes running Octave and still disagrees with the
+grader. That appears nowhere. What appears instead is execution collapsing when
+the loop ban arrives, on exactly the constructions where a loop-free formulation
+is awkward: windowed medians under dilation, circular cross-correlation, and
+parsing a cell array of records.
+
+Worth noting because it is not obvious: **the loop ban is not enforced by the
+reward.** `require_vectorized` drives the `vectorized` metric only, so a model
+that ignores the ban and writes a loop still scores a full solve if the answer is
+right. These cells are not failing because loops are punished; they are failing
+because the models obey the ban and then write worse code.
+
+Two reasons not to act on this yet: n is 3–4 tasks per cell here, and 4B
+truncation on these cells runs as high as **0.75** at the 1536-token cap. The
+definitive run fixes both.
