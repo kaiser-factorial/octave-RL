@@ -1,0 +1,68 @@
+{
+  "eval_examples": 20,
+  "group_size": 2,
+  "wilson_penalty_at_0.50": 0.19999999999999996,
+  "levels": {
+    "1": {
+      "tasks": 160,
+      "rollouts": 640,
+      "rate": 0.6828,
+      "stderr": 0.023,
+      "signal": 0.3573,
+      "independent_signal": 0.4332
+    },
+    "2": {
+      "tasks": 160,
+      "rollouts": 640,
+      "rate": 0.6341,
+      "stderr": 0.0235,
+      "signal": 0.3896,
+      "independent_signal": 0.464
+    },
+    "3": {
+      "tasks": 160,
+      "rollouts": 640,
+      "rate": 0.4406,
+      "stderr": 0.0273,
+      "signal": 0.349,
+      "independent_signal": 0.4929
+    }
+  },
+  "current_gates": [
+    {
+      "name": "level1_mastery",
+      "level": 1,
+      "nominal": 0.55,
+      "observed_needed": 0.75,
+      "vacuous_at_step_0": false
+    },
+    {
+      "name": "level2_signal",
+      "level": 2,
+      "nominal": 0.2,
+      "observed_needed": 0.35,
+      "vacuous_at_step_0": true
+    },
+    {
+      "name": "level2_mastery",
+      "level": 2,
+      "nominal": 0.45,
+      "observed_needed": 0.65,
+      "vacuous_at_step_0": false
+    },
+    {
+      "name": "level2_advanced",
+      "level": 2,
+      "nominal": 0.6,
+      "observed_needed": 0.8,
+      "vacuous_at_step_0": false
+    },
+    {
+      "name": "level3_signal",
+      "level": 3,
+      "nominal": 0.1,
+      "observed_needed": 0.25,
+      "vacuous_at_step_0": true
+    }
+  ]
+}

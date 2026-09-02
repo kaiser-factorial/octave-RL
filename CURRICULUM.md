@@ -48,31 +48,55 @@ demotes stages in which it is the working set. Evaluations collected before a
 transition cannot be reused to satisfy the next stage's consecutive-evaluation
 requirement.
 
-### These thresholds predate 0.5.0 and need re-tuning
+### Those four bullets are wrong as written
 
-**They were chosen against a level ladder that no longer exists.** Every gate
-above assumes Level 1 sits well above Level 2, so that clearing one stage is
-evidence about readiness for the next. Parameterisation flattened that.
-Qwen3.5-4B, single-turn, 480 tasks per level:
+**The gate is the Wilson lower bound, not the observed rate**, and at the
+default 20-rollout evaluation the two are far apart. Every threshold above
+demands a substantially higher observed score than it states:
 
-| pool | L1 | L2 | L3 | L2 as a share of L1 |
-|---|---:|---:|---:|---:|
-| 0.4.x | 0.400 | 0.214 | 0.118 | **54%** |
-| 0.5.0 | 0.327 | 0.289 | 0.167 | **88%** |
+| gate | nominal | observed actually required |
+|---|---:|---:|
+| `level1_mastery` | 0.55 | **0.750** |
+| `level2_signal` | 0.20 | **0.350** |
+| `level2_mastery` | 0.45 | **0.650** |
+| `level2_advanced` | 0.60 | **0.800** |
+| `level3_signal` | 0.10 | **0.250** |
 
-Level 1 came down and Levels 2 and 3 came up: the old pool had a cliff between
-Levels 1 and 2, the new one has a gradient. That is a better shape for training
-signal and a worse one for *staged promotion*, because the stages no longer
-separate. On these numbers a policy reaching the 0.55 Level 1 gate would already
-be far past the 0.20 Level 2 gate, so the intermediate stage would be
-transitional in name only.
+"Introduce Level 2 after Level 1 exceeds 0.55" is really 0.75. The +0.20 gap is
+a property of `--eval-examples`, not of the curriculum: it falls to +0.09 at 100
+rollouts and +0.06 at 200. Run `scripts/derive_curriculum_gates.py` to get the
+effective bar for any evaluation size before quoting a threshold.
 
-Nothing here is broken -- the controller will run and its gates will fire -- but
-a promotion sequence it reports is no longer evidence that difficulty was
-approached in order. Re-derive the thresholds from measured per-level rates on
-the parameterised pool before quoting a staged result, and note that these
-figures are single-turn while the controller gates on the three-attempt
-scaffold, which was worth 3-4x on the old pool.
+### These thresholds predate 0.5.0, and the ladder they assume is gone
+
+Measured under the scaffold the controller actually evaluates with -- three
+attempts with the guide -- Qwen3.5-4B on the parameterised pool scores:
+
+| level | rate | signal at group size 2 | all-one groups |
+|---|---:|---:|---:|
+| 1 | 0.683 ± 0.023 | 0.357 | 0.306 |
+| 2 | 0.634 ± 0.024 | **0.390** | 0.250 |
+| 3 | 0.441 ± 0.027 | 0.349 | 0.138 |
+
+Levels 1 and 2 are two standard errors apart, every level is productive before
+training starts, and **Level 2 produces more usable gradient than Level 1**.
+The curriculum's premise -- hard levels wasted early, easy levels exhausted late
+-- fails in both directions. If anything Level 1 is the closest to exhaustion,
+at 30.6% unanimous successes against Level 3's 13.8%.
+
+Against that ladder the staging is inverted. The untrained policy **already
+passes `level2_signal` and `level3_signal`**, and it sits 0.016 from the gate
+that opens stage 3 against 0.067 from the gate that opens stage 1 -- four times
+closer to the later gate. A promotion sequence through these stages would report
+that difficulty was approached in order when Level 1 was the last thing to
+clear.
+
+Re-numbering cannot repair this. `level2_signal` means "Level 2 now produces
+enough signal to become the working set", and Level 2 out-produces Level 1
+before any training happens; no threshold makes that sentence true. **Do not
+quote a staged result from this controller on the 0.5.0 pool until the stage
+structure itself is revisited.** The measurement, its limits, and the derivation
+are in `artifacts/curriculum-gates-20260902/`.
 
 ## Token envelope
 
